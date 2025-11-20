@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { MapPin, Calendar, Clock, Zap } from "lucide-react";
+import { MapPin, Calendar, Clock, Zap, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
 import { MapComponent } from "@/components/map-component";
@@ -39,6 +40,12 @@ export function BookingSummary({
   const subtotal = pricePerKwh * estimatedKwh;
   const serviceFee = subtotal * 0.1;
   const total = subtotal + serviceFee;
+
+  const openDirections = () => {
+    if (station) {
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(station.location)}`, '_blank');
+    }
+  };
 
   return (
     <Card className="p-6" data-testid="card-booking-summary">

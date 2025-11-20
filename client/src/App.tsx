@@ -30,20 +30,24 @@ function Router() {
 
 import { Footer } from "@/components/footer";
 
+import { ErrorBoundary } from "@/components/error-boundary";
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <div className="min-h-screen bg-background flex flex-col">
-          <Header />
-          <div className="flex-1">
-            <Router />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <div className="min-h-screen bg-background flex flex-col">
+            <Header />
+            <div className="flex-1">
+              <Router />
+            </div>
+            <Footer />
           </div>
-          <Footer />
-        </div>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

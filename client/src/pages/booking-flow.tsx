@@ -206,6 +206,8 @@ export default function BookingFlow() {
   const serviceFee = subtotal * 0.1;
   const totalCost = subtotal + serviceFee;
 
+  console.log("BookingFlow Render:", { step, selectedDate, selectedSlot, station });
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-6xl px-6 py-8">
@@ -224,8 +226,8 @@ export default function BookingFlow() {
             <div key={s} className="flex items-center">
               <div
                 className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${s <= step
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-muted-foreground"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-muted-foreground"
                   }`}
                 data-testid={`step-${s}`}
               >
