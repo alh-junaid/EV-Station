@@ -24,8 +24,19 @@ export default function Login() {
         await login.mutateAsync({ email, password });
       }
       setLocation("/");
-    } catch (err) {
-      // errors are handled by useAuth toasts; fallback log
+    } catch (err: any) {
+      // Check for "User not found" error
+      const message = err?.message || "";
+      if (message.includes("User not found") || message.includes("404")) {
+        // You could also automatically switch to register mode:
+        // setIsRegister(true);
+        // But user asked for a message.
+        // The useAuth hook already shows a toast.
+        // Let's add a visible message on the form too or rely on the toast.
+        // Given the user request, I'll make it very explicit.
+        alert("Account does not exist. Please register."); // Simple and effective for "it has to say"
+        setIsRegister(true); // Help the user by switching to register
+      }
       console.error(err);
     }
   };

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupWebSocket, getWebSocketHandler } from "./websocket";
 import { insertBookingSchema } from "@shared/schema";
 import Stripe from "stripe";
 import bcrypt from "bcryptjs";
@@ -28,87 +29,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // simple ping endpoint to verify API server is responding with JSON
   app.get('/api/ping', (_req, res) => res.json({ ok: true }));
 
-    // Auth endpoints
-    app.post("/api/register", async (req, res) => {
-      try {
-        const { email, password, name, carModel, carNumber } = req.body;
-        if (!email || !password) return res.status(400).json({ error: "Missing fields" });
+  // Auth endpoints
+  app.post("/api/register", async (req, res) => {
+    try {
+      const { email, password, name, carModel, carNumber } = req.body;
+      if (!email || !password) return res.status(400).json({ error: "Missing fields" });
 
-        const existing = await storage.getUserByEmail(email);
-        if (existing) return res.status(409).json({ error: "User already exists" });
+      const existing = await storage.getUserByEmail(email);
+      if (existing) return res.status(409).json({ error: "User already exists" });
 
-        const hashed = await bcrypt.hash(password, 10);
-        const user = await storage.createUser(email, hashed, name, carModel, carNumber);
-        // Create session
-        // @ts-ignore - set session userId
-        req.session.userId = user.id;
+      const hashed = await bcrypt.hash(password, 10);
+      const user = await storage.createUser(email, hashed, name, carModel, carNumber);
+      // Create session
+      // @ts-ignore - set session userId
+      req.session.userId = user.id;
 
-        res.json({ id: user.id, email: user.email, name: user.name, carModel: user.carModel, carNumber: user.carNumber });
-      } catch (error) {
-        console.error("Registration error:", error);
-        res.status(500).json({ error: "Failed to register" });
-      }
-    });
+      res.json({ id: user.id, email: user.email, name: user.name, carModel: user.carModel, carNumber: user.carNumber });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Failed to register" });
+    }
+  });
 
-    app.post("/api/login", async (req, res) => {
-      try {
-        const { email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ error: "Missing fields" });
+  app.post("/api/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) return res.status(400).json({ error: "Missing fields" });
 
-        const user = await storage.getUserByEmail(email);
-        if (!user) return res.status(404).json({ error: "User not found" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(404).json({ error: "User not found" });
 
-        const ok = await bcrypt.compare(password, user.hashedPassword);
-        if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+      const ok = await bcrypt.compare(password, user.hashedPassword);
+      if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
-        // @ts-ignore
-        req.session.userId = user.id;
-        res.json({ id: user.id, email: user.email, name: user.name, carModel: user.carModel, carNumber: user.carNumber });
-      } catch (error) {
-        console.error("Login error:", error);
-        res.status(500).json({ error: "Failed to login" });
-      }
-    });
-
-    app.get("/api/me", async (req, res) => {
-      try {
-        // @ts-ignore
-        const userId = req.session?.userId;
-        if (!userId) return res.json({ user: null });
-        const user = await storage.getUserById(userId);
-        if (!user) return res.json({ user: null });
-        res.json({ user: { id: user.id, email: user.email, name: user.name, carModel: user.carModel, carNumber: user.carNumber } });
-      } catch (error) {
-        console.error("/api/me error:", error);
-        res.status(500).json({ error: "Failed" });
-      }
-    });
-
-    // Update profile (name, carModel, carNumber)
-    app.patch("/api/me", async (req, res) => {
-      try {
-        // @ts-ignore
-        const userId = req.session?.userId;
-        if (!userId) return res.status(401).json({ error: "Not authenticated" });
-
-        const { name, carModel, carNumber } = req.body || {};
-        console.log(`/api/me PATCH called for userId=${userId} body=`, { name, carModel, carNumber });
-
-        const updated = await storage.updateUser(userId, { name: name ?? null, carModel: carModel ?? null, carNumber: carNumber ?? null });
-        if (!updated) return res.status(404).json({ error: "User not found" });
-
-        return res.json({ id: updated.id, email: updated.email, name: updated.name, carModel: updated.carModel, carNumber: updated.carNumber });
-      } catch (error) {
-        console.error("/api/me patch error:", error);
-        return res.status(500).json({ error: "Failed to update profile" });
-      }
-    });
-
-    app.post("/api/logout", async (req, res) => {
       // @ts-ignore
-      req.session?.destroy(() => {});
-      res.json({ ok: true });
-    });
+      req.session.userId = user.id;
+      res.json({ id: user.id, email: user.email, name: user.name, carModel: user.carModel, carNumber: user.carNumber });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Failed to login" });
+    }
+  });
+
+  app.get("/api/me", async (req, res) => {
+    try {
+      // @ts-ignore
+      const userId = req.session?.userId;
+      if (!userId) return res.json({ user: null });
+      const user = await storage.getUserById(userId);
+      if (!user) return res.json({ user: null });
+      res.json({ user: { id: user.id, email: user.email, name: user.name, carModel: user.carModel, carNumber: user.carNumber } });
+    } catch (error) {
+      console.error("/api/me error:", error);
+      res.status(500).json({ error: "Failed" });
+    }
+  });
+
+  // Update profile (name, carModel, carNumber)
+  app.patch("/api/me", async (req, res) => {
+    try {
+      // @ts-ignore
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+
+      const { name, carModel, carNumber } = req.body || {};
+      console.log(`/api/me PATCH called for userId=${userId} body=`, { name, carModel, carNumber });
+
+      const updated = await storage.updateUser(userId, { name: name ?? null, carModel: carModel ?? null, carNumber: carNumber ?? null });
+      if (!updated) return res.status(404).json({ error: "User not found" });
+
+      return res.json({ id: updated.id, email: updated.email, name: updated.name, carModel: updated.carModel, carNumber: updated.carNumber });
+    } catch (error) {
+      console.error("/api/me patch error:", error);
+      return res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  app.post("/api/logout", async (req, res) => {
+    // @ts-ignore
+    req.session?.destroy(() => { });
+    res.json({ ok: true });
+  });
 
   // Station routes
   app.get("/api/stations", async (req, res) => {
@@ -121,18 +122,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Hardware/Camera endpoints
+  app.post("/api/hardware/identify", async (req, res) => {
+    try {
+      const { stationId, plateNumber } = req.body;
+      console.log(`Identify request: Station ${stationId}, Plate ${plateNumber}`);
+
+      if (!stationId || !plateNumber) {
+        return res.status(400).json({ error: "Missing fields" });
+      }
+
+      // Check if there is a valid booking
+      // Logic: Find booking for this car, at this station, where current time is within start/end
+      // For simplicity in this demo, we'll just check if there's *any* upcoming/active booking for today
+      // In production, check specific time slot
+
+      // Mock check for demo purposes (since we might not have real bookings with this plate yet)
+      // You should implement the real DB query here using storage.getBookingsByPlate(...)
+
+      // Let's assume if plate starts with "KA", it's valid for demo
+      const isAuthorized = plateNumber.startsWith("KA");
+
+      if (isAuthorized) {
+        console.log("Authorized! Sending OPEN command.");
+        const ws = getWebSocketHandler();
+        if (ws) {
+          // Send name if available (mocked for now)
+          ws.sendCommandToESP32(stationId, "GATE_OPEN", { name: "User" });
+        }
+        return res.json({ authorized: true });
+      } else {
+        console.log("Not Authorized. Sending DENIED command.");
+        const ws = getWebSocketHandler();
+        if (ws) {
+          ws.sendCommandToESP32(stationId, "GATE_DENIED");
+        }
+        return res.json({ authorized: false });
+      }
+    } catch (error) {
+      console.error("Identify error:", error);
+      res.status(500).json({ error: "Internal error" });
+    }
+  });
+
   app.get("/api/stations/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid station ID" });
       }
-      
+
       const station = await storage.getStation(id);
       if (!station) {
         return res.status(404).json({ error: "Station not found" });
       }
-      
+
       res.json(station);
     } catch (error) {
       console.error("Error fetching station:", error);
@@ -144,14 +188,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const dateStr = req.query.date as string;
-      
+
       if (isNaN(id) || !dateStr) {
         return res.status(400).json({ error: "Invalid parameters" });
       }
-      
+
       const date = new Date(dateStr);
       const bookings = await storage.getStationBookings(id, date);
-      
+
       // Return booked time slots
       const bookedSlots = bookings.map(b => b.startTime);
       res.json({ bookedSlots });
@@ -190,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/payment-intent", async (req, res) => {
     try {
       const { stationId, totalCost } = req.body;
-      
+
       if (!stationId || !totalCost) {
         return res.status(400).json({ error: "Missing required fields" });
       }
@@ -202,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const amount = Math.round(parseFloat(totalCost) * 100); // Convert to cents
-      
+
       if (!stripe) {
         return res.status(500).json({ error: 'Stripe not configured on server' });
       }
@@ -271,11 +315,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validatedData.stationId,
         validatedData.date
       );
-      
+
       const isSlotTaken = existingBookings.some(
         b => b.startTime === validatedData.startTime && b.status !== "cancelled"
       );
-      
+
       if (isSlotTaken) {
         return res.status(409).json({ error: "Time slot no longer available" });
       }
@@ -357,5 +401,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   const httpServer = createServer(app);
+  setupWebSocket(httpServer);
   return httpServer;
 }

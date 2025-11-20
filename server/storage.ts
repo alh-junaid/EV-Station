@@ -6,7 +6,7 @@ export interface IStorage {
   getStations(): Promise<Station[]>;
   getStation(id: number): Promise<Station | undefined>;
   createStation(station: InsertStation): Promise<Station>;
-  
+
   // Bookings
   getBookings(status?: string): Promise<Booking[]>;
   getBooking(id: string): Promise<Booking | undefined>;
@@ -39,31 +39,31 @@ export class MemStorage implements IStorage {
     // Seed some initial stations
     const initialStations: Omit<Station, 'id'>[] = [
       {
-        name: "Downtown Power Hub",
-        location: "123 Main St, San Francisco, CA",
-        image: "/api/placeholder-station-1.jpg",
+        name: "Indiranagar Power Hub",
+        location: "100 Feet Rd, Indiranagar, Bengaluru",
+        image: "/assets/generated_images/indiranagar.png", // Frontend maps this via ID usually, but good to have path
         chargerTypes: ["Level 2", "DC Fast"],
-        pricePerKwh: "0.35",
-        latitude: "37.7749",
-        longitude: "-122.4194",
+        pricePerKwh: "15.00", // INR
+        latitude: "12.9716",
+        longitude: "77.6412",
       },
       {
-        name: "Green Valley Charging",
-        location: "456 Oak Ave, Palo Alto, CA",
-        image: "/api/placeholder-station-2.jpg",
+        name: "Koramangala Charging Point",
+        location: "Forum Mall, Koramangala, Bengaluru",
+        image: "/assets/generated_images/koramangala.png",
         chargerTypes: ["DC Fast", "Tesla"],
-        pricePerKwh: "0.42",
-        latitude: "37.4419",
-        longitude: "-122.1430",
+        pricePerKwh: "18.50",
+        latitude: "12.9352",
+        longitude: "77.6245",
       },
       {
-        name: "Metro Charge Center",
-        location: "789 Broadway, Oakland, CA",
-        image: "/api/placeholder-station-3.jpg",
+        name: "Whitefield Tech Charge",
+        location: "ITPL Main Rd, Whitefield, Bengaluru",
+        image: "/assets/generated_images/whitefield.png",
         chargerTypes: ["Level 2"],
-        pricePerKwh: "0.28",
-        latitude: "37.8044",
-        longitude: "-122.2712",
+        pricePerKwh: "12.00",
+        latitude: "12.9698",
+        longitude: "77.7500",
       },
     ];
 
@@ -84,7 +84,7 @@ export class MemStorage implements IStorage {
   async createStation(insertStation: InsertStation): Promise<Station> {
     const id = this.stationIdCounter++;
     const station: Station = {
-      ...insertStation,
+      ...(insertStation as any),
       id,
       latitude: insertStation.latitude ?? null,
       longitude: insertStation.longitude ?? null,
@@ -131,8 +131,8 @@ export class MemStorage implements IStorage {
   async getStationBookings(stationId: number, date: Date): Promise<Booking[]> {
     const dateStr = date.toISOString().split('T')[0];
     return Array.from(this.bookings.values()).filter(
-      b => b.stationId === stationId && 
-      b.date.toISOString().split('T')[0] === dateStr
+      b => b.stationId === stationId &&
+        b.date.toISOString().split('T')[0] === dateStr
     );
   }
 

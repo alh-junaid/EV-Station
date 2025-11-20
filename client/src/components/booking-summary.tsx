@@ -3,6 +3,8 @@ import { Separator } from "@/components/ui/separator";
 import { MapPin, Calendar, Clock, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
+import { MapComponent } from "@/components/map-component";
+import { type Station } from "@shared/schema";
 
 interface BookingSummaryProps {
   stationName: string;
@@ -16,6 +18,8 @@ interface BookingSummaryProps {
   personName?: string;
   carModel?: string;
   carNumber?: string;
+  // We need station details for the map
+  station?: Station;
 }
 
 export function BookingSummary({
@@ -30,6 +34,7 @@ export function BookingSummary({
   personName,
   carModel,
   carNumber,
+  station
 }: BookingSummaryProps) {
   const subtotal = pricePerKwh * estimatedKwh;
   const serviceFee = subtotal * 0.1;
@@ -115,6 +120,33 @@ export function BookingSummary({
             {formatCurrency(total)}
           </span>
         </div>
+
+        {station && (
+          <>
+            <Separator />
+            <div className="pt-2">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-medium text-sm">Location</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={openDirections}
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Get Directions
+                </Button>
+              </div>
+              <div className="rounded-md overflow-hidden border h-[200px] relative z-0">
+                <MapComponent
+                  singleStation={station}
+                  height="200px"
+                  zoom={14}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </Card>
   );

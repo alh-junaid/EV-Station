@@ -223,20 +223,18 @@ export default function BookingFlow() {
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  s <= step
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${s <= step
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-background text-muted-foreground"
-                }`}
+                  }`}
                 data-testid={`step-${s}`}
               >
                 {s}
               </div>
               {s < 3 && (
                 <div
-                  className={`w-12 h-0.5 ${
-                    s < step ? "bg-primary" : "bg-border"
-                  }`}
+                  className={`w-12 h-0.5 ${s < step ? "bg-primary" : "bg-border"
+                    }`}
                 />
               )}
             </div>
@@ -333,6 +331,7 @@ export default function BookingFlow() {
                 personName={personName}
                 carModel={carModel}
                 carNumber={carNumber}
+                station={station}
               />
             )}
           </div>

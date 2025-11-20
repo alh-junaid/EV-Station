@@ -28,13 +28,18 @@ function Router() {
   );
 }
 
+import { Footer } from "@/components/footer";
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background flex flex-col">
           <Header />
-          <Router />
+          <div className="flex-1">
+            <Router />
+          </div>
+          <Footer />
         </div>
         <Toaster />
       </TooltipProvider>

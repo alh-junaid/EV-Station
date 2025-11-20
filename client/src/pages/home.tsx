@@ -1,15 +1,32 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Zap, Calendar, CreditCard, MapPin, Shield, Clock } from "lucide-react";
+import { Zap, Calendar, CreditCard, MapPin } from "lucide-react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { type Station } from "@shared/schema";
+import { MapComponent } from "@/components/map-component";
 import heroImage from '@assets/generated_images/Hero_EV_charging_station_08667777.png';
 import station1 from '@assets/generated_images/Downtown_charging_station_0f050c4d.png';
-import station2 from '@assets/generated_images/Suburban_charging_hub_e5daf664.png';
-import station3 from '@assets/generated_images/Shopping_district_station_dd12b352.png';
+import station2 from '@assets/generated_images/Shopping_district_station_dd12b352.png';
+import station3 from '@assets/generated_images/Suburban_charging_hub_e5daf664.png';
 
 export default function Home() {
+  const { data: stations = [] } = useQuery<Station[]>({
+    queryKey: ["/api/stations"],
+  });
+
+  //todo: remove mock functionality - image mapping
+  const imageMap: Record<number, string> = {
+    1: station1,
+    2: station2,
+    3: station3,
+  };
+
+  // Get top 3 stations for display
+  const popularStations = stations.slice(0, 3);
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <section
         className="relative h-[80vh] flex items-center justify-center bg-cover bg-center"
         style={{ backgroundImage: `url(${heroImage})` }}
@@ -155,53 +172,41 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
-            <Card className="overflow-hidden hover-elevate">
-              <div className="aspect-[4/3]">
-                <img src={station1} alt="Downtown Power Hub" className="w-full h-full object-cover" />
-              </div>
-              <div className="p-6">
-                <h3 className="font-semibold text-lg mb-2">Downtown Power Hub</h3>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                  <MapPin className="h-4 w-4" />
-                  <span>San Francisco, CA</span>
+            {popularStations.map((station) => (
+              <Card key={station.id} className="overflow-hidden hover-elevate">
+                <div className="aspect-[4/3]">
+                  <img
+                    src={imageMap[station.id] || heroImage}
+                    alt={station.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <Link href="/stations">
-                  <Button variant="outline" className="w-full">View Details</Button>
-                </Link>
-              </div>
-            </Card>
+                <div className="p-6">
+                  <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                    <MapPin className="h-4 w-4" />
+                    <span>{station.location}</span>
+                  </div>
+                  <Link href="/stations">
+                    <Button variant="outline" className="w-full">View Details</Button>
+                  </Link>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <Card className="overflow-hidden hover-elevate">
-              <div className="aspect-[4/3]">
-                <img src={station2} alt="Green Valley Charging" className="w-full h-full object-cover" />
-              </div>
-              <div className="p-6">
-                <h3 className="font-semibold text-lg mb-2">Green Valley Charging</h3>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                  <MapPin className="h-4 w-4" />
-                  <span>Palo Alto, CA</span>
-                </div>
-                <Link href="/stations">
-                  <Button variant="outline" className="w-full">View Details</Button>
-                </Link>
-              </div>
-            </Card>
-
-            <Card className="overflow-hidden hover-elevate">
-              <div className="aspect-[4/3]">
-                <img src={station3} alt="Metro Charge Center" className="w-full h-full object-cover" />
-              </div>
-              <div className="p-6">
-                <h3 className="font-semibold text-lg mb-2">Metro Charge Center</h3>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                  <MapPin className="h-4 w-4" />
-                  <span>Oakland, CA</span>
-                </div>
-                <Link href="/stations">
-                  <Button variant="outline" className="w-full">View Details</Button>
-                </Link>
-              </div>
-            </Card>
+      <section className="py-16 px-6 bg-muted/30">
+        <div className="container mx-auto max-w-7xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Find Us On Map</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Locate our charging stations across the city
+            </p>
+          </div>
+          <div className="rounded-xl overflow-hidden shadow-lg border">
+            <MapComponent stations={stations} height="500px" />
           </div>
         </div>
       </section>
@@ -225,6 +230,7 @@ export default function Home() {
           </Link>
         </div>
       </section>
+
     </div>
   );
 }

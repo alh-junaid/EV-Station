@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { StationCard } from "@/components/station-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,8 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { type Station } from "@shared/schema";
 import station1 from '@assets/generated_images/Downtown_charging_station_0f050c4d.png';
-import station2 from '@assets/generated_images/Suburban_charging_hub_e5daf664.png';
-import station3 from '@assets/generated_images/Shopping_district_station_dd12b352.png';
+import station2 from '@assets/generated_images/Shopping_district_station_dd12b352.png';
+import station3 from '@assets/generated_images/Suburban_charging_hub_e5daf664.png';
 import heroImage from '@assets/generated_images/Hero_EV_charging_station_08667777.png';
 
 export default function Stations() {
@@ -18,8 +19,17 @@ export default function Stations() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: stations = [], isLoading } = useQuery<Station[]>({
+  const { data: allStations = [], isLoading } = useQuery<Station[]>({
     queryKey: ["/api/stations"],
+  });
+
+  const stations = allStations.filter((station) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      station.name.toLowerCase().includes(query) ||
+      station.location.toLowerCase().includes(query)
+    );
   });
 
   //todo: remove mock functionality - image mapping
@@ -31,6 +41,21 @@ export default function Stations() {
 
   const handleBookStation = (stationId: number) => {
     setLocation(`/book/${stationId}`);
+  };
+
+  const { slotStatus } = useWebSocket();
+
+  const getAvailability = (stationId: number) => {
+    // Check slots 1, 2, 3 for this station
+    // If any is false (not occupied) or undefined (assumed free), it's available
+    // If all 3 are true (occupied), it's full
+    // This is a simple logic for demo.
+    const s1 = slotStatus[`${stationId}-1`];
+    const s2 = slotStatus[`${stationId}-2`];
+    const s3 = slotStatus[`${stationId}-3`];
+
+    if (s1 && s2 && s3) return "full";
+    return "available";
   };
 
   return (
@@ -129,7 +154,7 @@ export default function Stations() {
                 image={imageMap[station.id] || heroImage}
                 chargerTypes={station.chargerTypes}
                 pricePerKwh={parseFloat(station.pricePerKwh)}
-                availability="available"
+                availability={getAvailability(station.id)}
                 onBook={() => handleBookStation(station.id)}
               />
             ))}
