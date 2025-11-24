@@ -63,6 +63,13 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // Log the DATABASE_URL (masked) to help debug which DB adapter will be used
+  try {
+    const url = process.env.DATABASE_URL || "(not set)";
+    const masked = url.replace(/:(?:[^@]+)@/, ':****@');
+    log(`Using DATABASE_URL=${masked}`);
+  } catch (_) {}
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
