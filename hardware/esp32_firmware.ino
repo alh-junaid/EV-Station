@@ -6,7 +6,7 @@
 // --- CONFIGURATION ---
 const char* ssid = "zoo";
 const char* password = "Mirha@2023";
-const char* ws_server = "localhost"; // e.g., "192.168.1.100"
+const char* ws_server = "192.168.0.6"; // e.g., "192.168.1.100"
 const int ws_port = 5000;
 const int STATION_ID = 1;
 

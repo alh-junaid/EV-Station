@@ -13,6 +13,7 @@ export interface IStorage {
   createBooking(booking: InsertBooking): Promise<Booking>;
   updateBookingStatus(id: string, status: string): Promise<Booking | undefined>;
   getStationBookings(stationId: number, date: Date): Promise<Booking[]>;
+  getBookingsByPlate(plateNumber: string): Promise<Booking[]>;
 
   // Users
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -133,6 +134,12 @@ export class MemStorage implements IStorage {
     return Array.from(this.bookings.values()).filter(
       b => b.stationId === stationId &&
         b.date.toISOString().split('T')[0] === dateStr
+    );
+  }
+
+  async getBookingsByPlate(plateNumber: string): Promise<Booking[]> {
+    return Array.from(this.bookings.values()).filter(
+      b => b.carNumber === plateNumber
     );
   }
 

@@ -61,11 +61,14 @@ export class WebSocketHandler {
           isOccupied: data.isOccupied
         });
         break;
-        
+
       case "CAMERA_TRIGGER":
-        // Forward trigger to Camera Script (if connected via WS) or handle logic
+        // Forward trigger to Camera Script (if connected via WS)
         console.log(`Camera Trigger received from Station ${client.stationId}`);
-        // For now, we can just log it or notify clients
+        this.broadcastToClients({
+          type: "CAMERA_TRIGGER",
+          stationId: client.stationId
+        });
         break;
 
       default:

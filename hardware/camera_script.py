@@ -1,3 +1,9 @@
+import sys
+import io
+
+# Force UTF-8 encoding for stdout to handle progress bars on Windows
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 import cv2
 import easyocr
 import requests
@@ -43,13 +49,30 @@ def ws_thread():
                                 on_close=on_close)
     ws.run_forever()
 
+    for (bbox, text, prob) in result:
+        if prob > 0.5:
+            print(f"Detected: {text} (Prob: {prob:.2f})")
+            # Clean text (remove spaces, special chars)
+            clean_text = ''.join(e for e in text if e.isalnum()).upper()
+            
+            # Validate format (optional, e.g., length > 4)
+            if len(clean_text) > 4:
+                check_booking(clean_text)
+
 def process_frame(frame):
+    print("Saving debug image to captured_debug.jpg...")
+    cv2.imwrite('captured_debug.jpg', frame)
+
     # Convert to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
     # Detect text
+    print("Reading text from image...")
     result = reader.readtext(gray)
     
+    if not result:
+        print("No text detected.")
+
     for (bbox, text, prob) in result:
         if prob > 0.5:
             print(f"Detected: {text} (Prob: {prob:.2f})")

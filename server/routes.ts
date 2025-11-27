@@ -135,24 +135,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if there is a valid booking
       // Logic: Find booking for this car, at this station, where current time is within start/end
       // For simplicity in this demo, we'll just check if there's *any* upcoming/active booking for today
-      // In production, check specific time slot
 
-      // Mock check for demo purposes (since we might not have real bookings with this plate yet)
-      // You should implement the real DB query here using storage.getBookingsByPlate(...)
+      const bookings = await storage.getBookingsByPlate(plateNumber);
 
-      // Let's assume if plate starts with "KA", it's valid for demo
-      const isAuthorized = plateNumber.startsWith("KA");
+      // Filter for bookings at this station and for today (or future)
+      // In a real app, you'd check the specific time slot
+      const validBooking = bookings.find(b =>
+        b.stationId === stationId &&
+        b.status !== "cancelled"
+      );
 
-      if (isAuthorized) {
-        console.log("Authorized! Sending OPEN command.");
+      if (validBooking) {
+        console.log(`Authorized! Found booking ${validBooking.id}. Sending OPEN command.`);
         const ws = getWebSocketHandler();
         if (ws) {
-          // Send name if available (mocked for now)
-          ws.sendCommandToESP32(stationId, "GATE_OPEN", { name: "User" });
+          // Send name if available
+          ws.sendCommandToESP32(stationId, "GATE_OPEN", { name: validBooking.personName || "User" });
         }
-        return res.json({ authorized: true });
+        return res.json({ authorized: true, bookingId: validBooking.id });
       } else {
-        console.log("Not Authorized. Sending DENIED command.");
+        console.log("Not Authorized. No valid booking found. Sending DENIED command.");
         const ws = getWebSocketHandler();
         if (ws) {
           ws.sendCommandToESP32(stationId, "GATE_DENIED");
