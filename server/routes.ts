@@ -134,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Map Station 1 to Indiranagar (ID 1) explicitly for clarity/logging
       if (stationId == 1) {
-        console.log("Station 1 maps to Indiranagar Power Hub");
+        console.log("📍 Station 1 = Indiranagar Power Hub");
       }
 
       // Send SCANNING status to LCD
@@ -144,20 +144,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if there is a valid booking
-      // Logic: Find booking for this car, at this station, where current time is within start/end
-      // For simplicity in this demo, we'll just check if there's *any* upcoming/active booking for today
-
       const bookings = await storage.getBookingsByPlate(plateNumber);
+      console.log(`📋 Found ${bookings.length} booking(s) for plate ${plateNumber}`);
 
-      // Filter for bookings at this station and for today (or future)
-      // In a real app, you'd check the specific time slot
-      const validBooking = bookings.find(b =>
-        b.stationId === stationId &&
-        b.status !== "cancelled"
-      );
+      // Filter for bookings at this station and not cancelled
+      const validBooking = bookings.find(b => {
+        const isMatch = b.stationId === stationId && b.status !== "cancelled";
+        if (b.stationId === stationId) {
+          console.log(`   Booking ${b.id}: station=${b.stationId}, status=${b.status}, match=${isMatch}`);
+        }
+        return isMatch;
+      });
 
       if (validBooking) {
-        console.log(`Authorized! Found booking ${validBooking.id}. Sending OPEN command.`);
+        console.log(`✅ AUTHORIZED! Booking ${validBooking.id}`);
+        console.log(`   Name: ${validBooking.personName || 'Guest'}`);
+        console.log(`   Time: ${validBooking.startTime}`);
         const ws = getWebSocketHandler();
         if (ws) {
           // Send name if available
@@ -165,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return res.json({ authorized: true, bookingId: validBooking.id });
       } else {
-        console.log("Not Authorized. No valid booking found. Sending DENIED command.");
+        console.log(`🚫 NOT AUTHORIZED - No valid booking for ${plateNumber} at station ${stationId}`);
         const ws = getWebSocketHandler();
         if (ws) {
           ws.sendCommandToESP32(stationId, "GATE_DENIED");

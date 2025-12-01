@@ -13,16 +13,18 @@ import Profile from "@/pages/profile";
 import HowItWorks from "@/pages/how-it-works";
 import NotFound from "@/pages/not-found";
 
+import { ProtectedRoute } from "@/lib/protected-route";
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/stations" component={Stations} />
-      <Route path="/bookings" component={Bookings} />
-      <Route path="/book/:id" component={BookingFlow} />
+      <ProtectedRoute path="/bookings" component={Bookings} />
+      <ProtectedRoute path="/book/:id" component={BookingFlow} />
       <Route path="/login" component={Login} />
       <Route path="/how-it-works" component={HowItWorks} />
-      <Route path="/profile" component={Profile} />
+      <ProtectedRoute path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

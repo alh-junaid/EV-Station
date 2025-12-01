@@ -89,8 +89,9 @@ export class WebSocketHandler {
       case "CAMERA_TRIGGER":
         // Forward trigger to Camera Script (if connected via WS)
         const triggerStation = data.stationId ?? client.stationId;
-        console.log(`Camera Trigger received for Station ${triggerStation}`);
-        this.broadcastToClients({
+        console.log(`🎥 Camera Trigger received from ESP32 for Station ${triggerStation}`);
+        // Send to camera, not to browser clients!
+        this.sendToCamera(triggerStation, {
           type: "CAMERA_TRIGGER",
           stationId: triggerStation,
         });
@@ -109,10 +110,23 @@ export class WebSocketHandler {
     });
   }
 
+  // Send message to camera for specific station
+  private sendToCamera(stationId: number, message: any) {
+    console.log(`Sending to camera for station ${stationId}:`, message.type);
+    this.clients.forEach((client) => {
+      if (client.type === "CAMERA" && client.stationId === stationId && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify(message));
+        console.log(`✓ Message sent to camera`);
+      }
+    });
+  }
+
   public sendCommandToESP32(stationId: number, command: string, payload: any = {}) {
+    console.log(`Sending command to ESP32 station ${stationId}: ${command}`);
     this.clients.forEach((client) => {
       if (client.type === "ESP32" && client.stationId === stationId && client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(JSON.stringify({ type: command, ...payload }));
+        console.log(`✓ Command sent to ESP32`);
       }
     });
   }

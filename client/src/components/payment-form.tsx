@@ -21,8 +21,16 @@ export function PaymentForm({ amount, onSubmit, disabled = false }: PaymentFormP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Strict validation for demo
+    const cleanCard = cardNumber.replace(/\s/g, "");
+    if (cleanCard !== "4242424242424242") {
+      alert("Demo Mode: Please use the exact test card number: 4242 4242 4242 4242");
+      return;
+    }
+
     setProcessing(true);
-    
+
     // For demo purposes, we'll simulate a successful payment
     // In production, this would use Stripe Elements to securely collect and tokenize card data
     setTimeout(() => {
@@ -102,7 +110,7 @@ export function PaymentForm({ amount, onSubmit, disabled = false }: PaymentFormP
           disabled={processing || disabled}
           data-testid="button-pay"
         >
-                {processing ? "Processing..." : `Pay ${formatCurrency(amount)}`}
+          {processing ? "Processing..." : `Pay ${formatCurrency(amount)}`}
         </Button>
       </form>
     </Card>
