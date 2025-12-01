@@ -132,6 +132,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing fields" });
       }
 
+      // Map Station 1 to Indiranagar (ID 1) explicitly for clarity/logging
+      if (stationId == 1) {
+        console.log("Station 1 maps to Indiranagar Power Hub");
+      }
+
+      // Send SCANNING status to LCD
+      const ws = getWebSocketHandler();
+      if (ws) {
+        ws.sendCommandToESP32(stationId, "SCANNING", { plateNumber });
+      }
+
       // Check if there is a valid booking
       // Logic: Find booking for this car, at this station, where current time is within start/end
       // For simplicity in this demo, we'll just check if there's *any* upcoming/active booking for today

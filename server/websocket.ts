@@ -3,7 +3,7 @@ import type { Server } from "http";
 
 interface StationClient {
   ws: WebSocket;
-  type: "ESP32" | "CLIENT";
+  type: "ESP32" | "CLIENT" | "CAMERA";
   stationId?: number;
 }
 
@@ -22,6 +22,7 @@ export class WebSocketHandler {
       this.clients.add(client);
 
       console.log("New WebSocket connection");
+      this.logClientSummary();
 
       ws.on("message", (message) => {
         try {
@@ -35,8 +36,17 @@ export class WebSocketHandler {
       ws.on("close", () => {
         this.clients.delete(client);
         console.log("WebSocket disconnected");
+        this.logClientSummary();
       });
     });
+  }
+
+  private logClientSummary() {
+    const counts = { CLIENT: 0, CAMERA: 0, ESP32: 0 } as Record<string, number>;
+    this.clients.forEach((c) => {
+      counts[c.type] = (counts[c.type] || 0) + 1;
+    });
+    console.log(`WS Clients: CLIENT=${counts.CLIENT}, CAMERA=${counts.CAMERA}, ESP32=${counts.ESP32}`);
   }
 
   private handleMessage(client: StationClient, data: any) {
@@ -45,29 +55,44 @@ export class WebSocketHandler {
         client.type = "ESP32";
         client.stationId = data.stationId;
         console.log(`ESP32 registered for Station ${data.stationId}`);
+        this.logClientSummary();
+        break;
+
+      case "REGISTER_CAMERA":
+        client.type = "CAMERA";
+        client.stationId = data.stationId;
+        console.log(`Camera registered for Station ${data.stationId}`);
+        this.logClientSummary();
         break;
 
       case "REGISTER_CLIENT":
         client.type = "CLIENT";
-        console.log("Client registered for updates");
+        if (data.stationId) {
+          client.stationId = data.stationId;
+          console.log(`Client registered for updates (station ${data.stationId})`);
+        } else {
+          console.log("Client registered for updates");
+        }
+        this.logClientSummary();
         break;
 
       case "SLOT_UPDATE":
-        // Broadcast slot status to all web clients
+        // Use stationId from the message payload (esp32 or camera should include it)
         this.broadcastToClients({
           type: "SLOT_UPDATE",
-          stationId: client.stationId,
+          stationId: data.stationId ?? client.stationId,
           slotId: data.slotId,
-          isOccupied: data.isOccupied
+          isOccupied: data.isOccupied,
         });
         break;
 
       case "CAMERA_TRIGGER":
         // Forward trigger to Camera Script (if connected via WS)
-        console.log(`Camera Trigger received from Station ${client.stationId}`);
+        const triggerStation = data.stationId ?? client.stationId;
+        console.log(`Camera Trigger received for Station ${triggerStation}`);
         this.broadcastToClients({
           type: "CAMERA_TRIGGER",
-          stationId: client.stationId
+          stationId: triggerStation,
         });
         break;
 
