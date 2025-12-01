@@ -39,7 +39,119 @@ except Exception as e:
 SERVER_URL = "http://localhost:5000"
 WS_URL = "ws://localhost:5000/ws"
 STATION_ID = 1
-CAMERA_ID = 0 # Default USB camera
+
+# CAMERA selection:
+# - If `CAMERA_ID` env var is set or `--camera N` passed, use that.
+# - Otherwise try indices 1..5 first (USB cams are often not index 0),
+#   then fall back to 0 (built-in) if nothing else opens.
+def parse_camera_id():
+    # CLI override: --camera N
+    if '--camera' in sys.argv:
+        try:
+            idx = sys.argv.index('--camera')
+            return int(sys.argv[idx + 1])
+        except Exception:
+            pass
+
+    # Config file override (saved selection)
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), 'camera_config.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as cf:
+                import json as _json
+                cfg = _json.load(cf)
+                if 'camera_id' in cfg:
+                    return int(cfg['camera_id'])
+    except Exception:
+        pass
+
+    # Env override
+    try:
+        env_val = os.environ.get('CAMERA_ID')
+        if env_val is not None:
+            return int(env_val)
+    except Exception:
+        pass
+
+    # Auto-scan: prefer indices 1..5, then 0
+    def probe(index):
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW if hasattr(cv2, 'CAP_DSHOW') else 0)
+        if not cap.isOpened():
+            cap.release()
+            return False
+        # try to grab a frame
+        ret, _ = cap.read()
+        cap.release()
+        return bool(ret)
+
+    for i in range(1, 6):
+        try:
+            if probe(i):
+                return i
+        except Exception:
+            continue
+
+    # fallback to 0
+    return 0
+
+CAMERA_ID = parse_camera_id()
+    
+
+def list_cameras(max_index: int = 10):
+    """Probe camera indices 0..max_index and print which ones can be opened.
+
+    Returns a dict of index -> boolean (True if probe succeeded).
+    """
+    results = {}
+    for i in range(0, max_index + 1):
+        try:
+            cap = cv2.VideoCapture(i, cv2.CAP_DSHOW if hasattr(cv2, 'CAP_DSHOW') else 0)
+            ok = False
+            if cap.isOpened():
+                ret, _ = cap.read()
+                ok = bool(ret)
+            if cap.isOpened():
+                cap.release()
+            results[i] = ok
+        except Exception:
+            results[i] = False
+    print("Camera probe results:")
+    for idx, ok in results.items():
+        print(f"  index {idx}: {'OK' if ok else 'no'}")
+    return results
+
+# If user asked to list cameras, do it and exit early.
+if '--list-cameras' in sys.argv:
+    list_cameras(10)
+    sys.exit(0)
+
+# Interactive selection: show cameras, let user pick, save to `hardware/camera_config.json`.
+if '--select-camera' in sys.argv:
+    res = list_cameras(10)
+    ok_indices = [i for i, ok in res.items() if ok]
+    if not ok_indices:
+        print('No cameras detected. Please plug in your USB camera and try again.')
+        sys.exit(1)
+    print('\nDetected camera indices:', ok_indices)
+    try:
+        sel = input('Enter camera index to use as default (or press Enter to cancel): ').strip()
+        if sel == '':
+            print('Selection cancelled.')
+            sys.exit(0)
+        sel_i = int(sel)
+        if sel_i not in ok_indices:
+            print(f'Index {sel_i} did not probe OK. Aborting.')
+            sys.exit(1)
+        cfg = {'camera_id': sel_i}
+        config_path = os.path.join(os.path.dirname(__file__), 'camera_config.json')
+        with open(config_path, 'w', encoding='utf-8') as cf:
+            import json as _json
+            _json.dump(cfg, cf)
+        print(f'Saved default camera index {sel_i} to {config_path}')
+        sys.exit(0)
+    except Exception as e:
+        print('Error during selection:', e)
+        sys.exit(1)
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
 
@@ -225,20 +337,7 @@ def heuristic_clean(text):
             return prefix + new_suffix
             
     return clean
-
-# --- CONFIGURATION ---
-SERVER_URL = "http://localhost:5000"
-WS_URL = "ws://localhost:5000/ws"
-STATION_ID = 1
-CAMERA_ID = 0 # Default USB camera
-MAX_RETRIES = 3
-RETRY_DELAY = 2  # seconds
-
-# Create captures directory
-CAPTURES_DIR = "captures"
-if not os.path.exists(CAPTURES_DIR):
-    os.makedirs(CAPTURES_DIR)
-    print(f"✓ Created {CAPTURES_DIR}/ directory")
+# Duplicate configuration block removed — using values defined earlier.
 
 # --- STATE ---
 should_capture = False
