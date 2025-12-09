@@ -12,6 +12,7 @@ export interface IStorage {
   getBooking(id: string): Promise<Booking | undefined>;
   createBooking(booking: InsertBooking): Promise<Booking>;
   updateBookingStatus(id: string, status: string): Promise<Booking | undefined>;
+  assignSlotToBooking(id: string, slotId: number): Promise<Booking | undefined>;
   getStationBookings(stationId: number, date: Date): Promise<Booking[]>;
   getBookingsByPlate(plateNumber: string): Promise<Booking[]>;
 
@@ -20,6 +21,10 @@ export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   createUser(email: string, hashedPassword: string, name?: string, carModel?: string, carNumber?: string): Promise<User>;
   updateUser(id: string, data: { name?: string | null; carModel?: string | null; carNumber?: string | null }): Promise<User | undefined>;
+
+  // Slot Management
+  updateSlotStatus(stationId: number, slotId: number, isOccupied: boolean): void;
+  getAvailableSlot(stationId: number): number | null;
 }
 
 export class MemStorage implements IStorage {
@@ -27,12 +32,14 @@ export class MemStorage implements IStorage {
   private stations: Map<number, Station>;
   private bookings: Map<string, Booking>;
   private stationIdCounter: number;
+  private slotStates: Map<number, Map<number, boolean>>; // stationId -> slotId -> isOccupied
 
   constructor() {
     this.stations = new Map();
     this.bookings = new Map();
     this.stationIdCounter = 1;
     this.users = new Map();
+    this.slotStates = new Map();
     this.seedData();
   }
 
@@ -87,8 +94,8 @@ export class MemStorage implements IStorage {
     const station: Station = {
       ...(insertStation as any),
       id,
-      latitude: insertStation.latitude ?? null,
-      longitude: insertStation.longitude ?? null,
+      latitude: (insertStation as any).latitude ?? null,
+      longitude: (insertStation as any).longitude ?? null,
     };
     this.stations.set(id, station);
     return station;
@@ -114,6 +121,7 @@ export class MemStorage implements IStorage {
       status: insertBooking.status ?? "upcoming",
       stripePaymentId: insertBooking.stripePaymentId ?? null,
       createdAt: new Date(),
+      slotId: null, // Default to null, assigned on entry
     };
     this.bookings.set(id, booking);
     return booking;
@@ -123,6 +131,16 @@ export class MemStorage implements IStorage {
     const booking = this.bookings.get(id);
     if (booking) {
       booking.status = status;
+      this.bookings.set(id, booking);
+      return booking;
+    }
+    return undefined;
+  }
+
+  async assignSlotToBooking(id: string, slotId: number): Promise<Booking | undefined> {
+    const booking = this.bookings.get(id);
+    if (booking) {
+      booking.slotId = slotId;
       this.bookings.set(id, booking);
       return booking;
     }
@@ -169,6 +187,33 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, updated);
     return updated;
+  }
+
+  updateSlotStatus(stationId: number, slotId: number, isOccupied: boolean): void {
+    if (!this.slotStates.has(stationId)) {
+      this.slotStates.set(stationId, new Map());
+    }
+    this.slotStates.get(stationId)!.set(slotId, isOccupied);
+    console.log(`[Storage] Updated Station ${stationId} Slot ${slotId} -> ${isOccupied ? 'Occupied' : 'Free'}`);
+  }
+
+  getAvailableSlot(stationId: number): number | null {
+    // Assuming 3 slots for now (1, 2, 3)
+    // If we had dynamic slots per station, we'd need to store that config.
+    // For now, hardcode 1-3 check.
+    const stationSlots = this.slotStates.get(stationId);
+    if (!stationSlots) {
+      // If no data, assume all free? Or wait for update?
+      // Let's assume 1 is free if no data.
+      return 1;
+    }
+
+    for (let i = 1; i <= 3; i++) {
+      if (!stationSlots.get(i)) { // If false or undefined (free)
+        return i;
+      }
+    }
+    return null; // All occupied
   }
 }
 

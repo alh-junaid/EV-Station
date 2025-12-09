@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupWebSocket, getWebSocketHandler } from "./websocket";
 import { insertBookingSchema } from "@shared/schema";
 import Stripe from "stripe";
+// @ts-ignore
 import bcrypt from "bcryptjs";
 
 // Initialize Stripe only if the secret key is available. Do not throw at import
@@ -160,12 +161,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`✅ AUTHORIZED! Booking ${validBooking.id}`);
         console.log(`   Name: ${validBooking.personName || 'Guest'}`);
         console.log(`   Time: ${validBooking.startTime}`);
+
         const ws = getWebSocketHandler();
+
+        // Check if already active (re-entry or just gate trigger)
+        if (validBooking.status === "active") {
+          console.log(`   Booking already active. Slot: ${validBooking.slotId}`);
+          if (ws) {
+            ws.sendCommandToESP32(stationId, "GATE_OPEN", {
+              name: validBooking.personName || "User",
+              slotId: validBooking.slotId
+            });
+          }
+          return res.json({ authorized: true, bookingId: validBooking.id, slotId: validBooking.slotId });
+        }
+
+        // New Entry: Assign Slot
+        const slotId = storage.getAvailableSlot(stationId);
+        if (!slotId) {
+          console.log(`🚫 STATION FULL - No slots available for ${plateNumber}`);
+          if (ws) {
+            ws.sendCommandToESP32(stationId, "GATE_DENIED"); // Could add reason "FULL"
+          }
+          return res.json({ authorized: false, reason: "Station Full" });
+        }
+
+        // Update Booking
+        await storage.assignSlotToBooking(validBooking.id, slotId);
+        await storage.updateBookingStatus(validBooking.id, "active");
+
+        console.log(`   Assigned Slot ${slotId}`);
+
         if (ws) {
           // Send name if available
-          ws.sendCommandToESP32(stationId, "GATE_OPEN", { name: validBooking.personName || "User" });
+          ws.sendCommandToESP32(stationId, "GATE_OPEN", {
+            name: validBooking.personName || "User",
+            slotId: slotId
+          });
         }
-        return res.json({ authorized: true, bookingId: validBooking.id });
+        return res.json({ authorized: true, bookingId: validBooking.id, slotId });
       } else {
         console.log(`🚫 NOT AUTHORIZED - No valid booking for ${plateNumber} at station ${stationId}`);
         const ws = getWebSocketHandler();
@@ -213,6 +247,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Return booked time slots
       const bookedSlots = bookings.map(b => b.startTime);
+
+      // Filter out past slots if date is today
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+
+      if (isToday) {
+        const currentHour = now.getHours();
+        // Add past hours to bookedSlots to make them unavailable
+        for (let i = 0; i < currentHour; i++) {
+          const timeStr = `${i.toString().padStart(2, '0')}:00`;
+          if (!bookedSlots.includes(timeStr)) {
+            bookedSlots.push(timeStr);
+          }
+        }
+      }
+
       res.json({ bookedSlots });
     } catch (error) {
       console.error("Error checking availability:", error);

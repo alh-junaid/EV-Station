@@ -30,11 +30,10 @@ export const bookings = pgTable("bookings", {
   personName: text("person_name"),
   carModel: text("car_model"),
   carNumber: text("car_number"),
+  slotId: integer("slot_id"),
 });
 
-export const insertStationSchema = createInsertSchema(stations).omit({
-  id: true,
-}).extend({
+export const insertStationSchema = createInsertSchema(stations).extend({
   chargerTypes: z.array(z.string()),
 });
 
