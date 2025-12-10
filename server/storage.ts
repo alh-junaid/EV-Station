@@ -1,5 +1,9 @@
 import { type Station, type InsertStation, type Booking, type InsertBooking } from "@shared/schema";
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
+
+const DATA_FILE = path.join(process.cwd(), "server_data.json");
 
 export interface IStorage {
   // Stations
@@ -40,7 +44,57 @@ export class MemStorage implements IStorage {
     this.stationIdCounter = 1;
     this.users = new Map();
     this.slotStates = new Map();
-    this.seedData();
+
+    // Try to load from file
+    if (fs.existsSync(DATA_FILE)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+
+        // Restore Users
+        if (data.users) {
+          data.users.forEach((u: any) => {
+            // Fix dates
+            u.createdAt = new Date(u.createdAt);
+            this.users.set(u.id, u);
+          });
+        }
+
+        // Restore Bookings
+        if (data.bookings) {
+          data.bookings.forEach((b: any) => {
+            b.date = new Date(b.date);
+            b.createdAt = new Date(b.createdAt);
+            this.bookings.set(b.id, b);
+          });
+        }
+
+        // Restore Stations (if any custom ones were added, though we seed them)
+        // For now, let's just re-seed stations to keep it simple, or load them if we want persistence there too.
+        // Let's re-seed to ensure defaults, but maybe we should persist them if we allowed creating stations.
+        // We'll just seed defaults if empty.
+
+        console.log(`[Storage] Loaded ${this.users.size} users and ${this.bookings.size} bookings from file.`);
+      } catch (e) {
+        console.error("[Storage] Failed to load data file:", e);
+      }
+    }
+
+    if (this.stations.size === 0) {
+      this.seedData();
+    }
+  }
+
+  private saveData() {
+    try {
+      const data = {
+        users: Array.from(this.users.values()),
+        bookings: Array.from(this.bookings.values()),
+        // We don't save stations for now as they are static/seeded
+      };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.error("[Storage] Failed to save data:", e);
+    }
   }
 
   private seedData() {
@@ -124,6 +178,7 @@ export class MemStorage implements IStorage {
       slotId: null, // Default to null, assigned on entry
     };
     this.bookings.set(id, booking);
+    this.saveData();
     return booking;
   }
 
@@ -132,6 +187,7 @@ export class MemStorage implements IStorage {
     if (booking) {
       booking.status = status;
       this.bookings.set(id, booking);
+      this.saveData();
       return booking;
     }
     return undefined;
@@ -142,6 +198,7 @@ export class MemStorage implements IStorage {
     if (booking) {
       booking.slotId = slotId;
       this.bookings.set(id, booking);
+      this.saveData();
       return booking;
     }
     return undefined;
@@ -173,6 +230,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const user: User = { id, email, hashedPassword, name: name ?? null, carModel: carModel ?? null, carNumber: carNumber ?? null, createdAt: new Date() };
     this.users.set(id, user);
+    this.saveData();
     return user;
   }
 
@@ -186,6 +244,7 @@ export class MemStorage implements IStorage {
       carNumber: data.carNumber === undefined ? user.carNumber : data.carNumber,
     };
     this.users.set(id, updated);
+    this.saveData();
     return updated;
   }
 

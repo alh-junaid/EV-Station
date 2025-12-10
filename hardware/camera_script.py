@@ -425,6 +425,8 @@ def process_frame_with_retry(frame):
                 time.sleep(RETRY_DELAY)
     
     log("[FAIL] No plate detected after 3 attempts")
+    # Notify server of failure so LCD can be reset (GATE_DENIED)
+    check_booking("NO_PLATE_DETECTED")
     log("="*60)
     return False
 

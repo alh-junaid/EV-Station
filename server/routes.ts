@@ -148,14 +148,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bookings = await storage.getBookingsByPlate(plateNumber);
       console.log(`📋 Found ${bookings.length} booking(s) for plate ${plateNumber}`);
 
-      // Filter for bookings at this station and not cancelled
-      const validBooking = bookings.find(b => {
-        const isMatch = b.stationId === stationId && b.status !== "cancelled";
-        if (b.stationId === stationId) {
-          console.log(`   Booking ${b.id}: station=${b.stationId}, status=${b.status}, match=${isMatch}`);
+      const now = new Date();
+      let validBooking: typeof bookings[0] | undefined;
+
+      // Iterate through bookings to find a valid one and clean up expired ones
+      for (const booking of bookings) {
+        // Must match station
+        if (booking.stationId !== stationId) continue;
+
+        // Skip cancelled or completed
+        if (booking.status === "cancelled" || booking.status === "completed") continue;
+
+        // Parse Schedule
+        // booking.startTime is "HH:MM"
+        const [hours, mins] = booking.startTime.split(':').map(Number);
+
+        // Construct Start and End times
+        // We assume booking.date represents the day. We set the hours/mins on that day.
+        const startDateTime = new Date(booking.date);
+        startDateTime.setHours(hours, mins, 0, 0);
+
+        const endDateTime = new Date(startDateTime);
+        endDateTime.setHours(startDateTime.getHours() + booking.duration);
+
+        // Check if expired
+        if (now > endDateTime) {
+          // If it's active but time has passed, mark it completed
+          if (booking.status === "active") {
+            console.log(`   Booking ${booking.id} is active but EXPIRED (End: ${endDateTime.toLocaleTimeString()}). Marking completed.`);
+            await storage.updateBookingStatus(booking.id, "completed");
+          }
+          // If upcoming and passed... treat as missed? For now just ignore for entry.
+          continue;
         }
-        return isMatch;
-      });
+
+        // Check window (Allow entry 15 mins early)
+        const entryStart = new Date(startDateTime);
+        entryStart.setMinutes(entryStart.getMinutes() - 15);
+
+        if (now >= entryStart && now <= endDateTime) {
+          validBooking = booking;
+          // If found a valid one, we can stop looking (or prioritize active?)
+          // If we found an "active" one that is valid, perfect.
+          // If we found an "upcoming" one, also good.
+          break;
+        } else {
+          console.log(`   Booking ${booking.id} logic: NOW ${now.toLocaleTimeString()} vs Window ${entryStart.toLocaleTimeString()} - ${endDateTime.toLocaleTimeString()} -> OUT OF WINDOW`);
+        }
+      }
 
       if (validBooking) {
         console.log(`✅ AUTHORIZED! Booking ${validBooking.id}`);
@@ -164,16 +204,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const ws = getWebSocketHandler();
 
-        // Check if already active (re-entry or just gate trigger)
+        // Check if already active
         if (validBooking.status === "active") {
-          console.log(`   Booking already active. Slot: ${validBooking.slotId}`);
+          console.log(`   Booking already active (Re-entry attempted). Slot: ${validBooking.slotId}`);
+
+          // User requested strict "One Entry" logic.
+          // If already active, deny entry (User must book again or is already inside).
           if (ws) {
-            ws.sendCommandToESP32(stationId, "GATE_OPEN", {
-              name: validBooking.personName || "User",
-              slotId: validBooking.slotId
-            });
+            // We use GATE_DENIED which shows "Access Denied / Not Booked" on LCD (based on current firmware)
+            // This matches user expectation "he has to book again".
+            ws.sendCommandToESP32(stationId, "GATE_DENIED");
           }
-          return res.json({ authorized: true, bookingId: validBooking.id, slotId: validBooking.slotId });
+          return res.json({ authorized: false, reason: "Booking already used/active" });
         }
 
         // New Entry: Assign Slot
@@ -201,7 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return res.json({ authorized: true, bookingId: validBooking.id, slotId });
       } else {
-        console.log(`🚫 NOT AUTHORIZED - No valid booking for ${plateNumber} at station ${stationId}`);
+        console.log(`🚫 NOT AUTHORIZED - No valid active/upcoming booking for ${plateNumber} at station ${stationId} right now.`);
         const ws = getWebSocketHandler();
         if (ws) {
           ws.sendCommandToESP32(stationId, "GATE_DENIED");
