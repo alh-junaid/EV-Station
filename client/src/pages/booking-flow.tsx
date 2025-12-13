@@ -88,15 +88,14 @@ export default function BookingFlow() {
     3: station3,
   };
 
-  const allTimeSlots = [
-    { time: "08:00", available: true },
-    { time: "10:00", available: true },
-    { time: "12:00", available: true },
-    { time: "14:00", available: true },
-    { time: "16:00", available: true },
-    { time: "18:00", available: true },
-    { time: "20:00", available: true },
-  ];
+  // Generate 24-hour slots (00:00 to 22:00)
+  const allTimeSlots = Array.from({ length: 12 }, (_, i) => {
+    const hour = i * 2;
+    return {
+      time: `${hour.toString().padStart(2, '0')}:00`,
+      available: true
+    };
+  });
 
   const bookedSlots = availabilityData?.bookedSlots || [];
   const timeSlots = allTimeSlots.map(slot => ({

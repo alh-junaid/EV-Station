@@ -124,6 +124,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // Station Availability Summary
+  app.get("/api/stations/availability/summary", async (req, res) => {
+    try {
+      const dateStr = (req.query.date as string) || new Date().toISOString().split('T')[0];
+      const date = new Date(dateStr);
+      const stations = await storage.getStations();
+      const summary = [];
+
+      for (const station of stations) {
+        const bookings = await storage.getStationBookings(station.id, date);
+        // Total slots per day (assuming 24h operation, 2h slots) = 12 slots * 1 charger (simplified)
+        // If station has multiple chargers, multiply. For now, assuming 1 slot per time block.
+        const totalSlots = 12; // 00:00 - 22:00
+        const bookedCount = bookings.filter(b => b.status !== 'cancelled').length;
+
+        let status = "High Availability";
+        const occupancy = bookedCount / totalSlots;
+        if (occupancy > 0.8) status = "Low Availability";
+        else if (occupancy > 0.4) status = "Medium Availability";
+
+        summary.push({
+          id: station.id,
+          name: station.name,
+          location: station.location,
+          totalSlots,
+          bookedSlots: bookedCount,
+          status
+        });
+      }
+
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching availability summary:", error);
+      res.status(500).json({ error: "Failed to fetch summary" });
+    }
+  });
+
   // Hardware/Camera endpoints
   app.post("/api/hardware/identify", async (req, res) => {
     try {
@@ -183,9 +221,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue;
         }
 
-        // Check window (Allow entry 15 mins early)
+        // Check window (Allow entry 30 mins early)
         const entryStart = new Date(startDateTime);
-        entryStart.setMinutes(entryStart.getMinutes() - 15);
+        entryStart.setMinutes(entryStart.getMinutes() - 30);
 
         if (now >= entryStart && now <= endDateTime) {
           validBooking = booking;

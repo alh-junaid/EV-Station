@@ -9,6 +9,7 @@ import heroImage from '@assets/generated_images/Hero_EV_charging_station_0866777
 import station1 from '@assets/generated_images/Downtown_charging_station_0f050c4d.png';
 import station2 from '@assets/generated_images/Shopping_district_station_dd12b352.png';
 import station3 from '@assets/generated_images/Suburban_charging_hub_e5daf664.png';
+import { AvailabilityDashboard } from "@/components/availability-dashboard";
 
 export default function Home() {
   const { data: stations = [] } = useQuery<Station[]>({
@@ -63,6 +64,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <div className="container mx-auto max-w-7xl px-6 relative z-10 -mt-10 mb-10">
+        <AvailabilityDashboard />
+      </div>
 
       <section className="py-16 px-6 bg-background">
         <div className="container mx-auto max-w-7xl">

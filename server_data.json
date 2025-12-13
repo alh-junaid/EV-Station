@@ -8,6 +8,15 @@
       "carModel": "Nissan Leaf",
       "carNumber": "RJ14CV0002",
       "createdAt": "2025-12-12T16:28:29.277Z"
+    },
+    {
+      "id": "e03e32ea-c8ed-460c-ba25-aa4e6580ee40",
+      "email": "prabudhsagar.vv@gmail.com",
+      "hashedPassword": "$2a$10$HfyZdGuloapkCd6XVKI.OOJQdzMnndoxWDXAJbBuQX8aowuw/v84u",
+      "name": "luna",
+      "carModel": "Nissan Leaf",
+      "carNumber": "KA51MH1234",
+      "createdAt": "2025-12-13T07:38:29.131Z"
     }
   ],
   "bookings": [
@@ -27,6 +36,24 @@
       "carModel": "Nissan Leaf",
       "carNumber": "RJ14CV0002",
       "createdAt": "2025-12-12T16:29:30.434Z",
+      "slotId": null
+    },
+    {
+      "id": "c646cc68-6879-484e-a3de-aa1b35631059",
+      "stationId": 1,
+      "stationName": "Indiranagar Power Hub",
+      "location": "100 Feet Rd, Indiranagar, Bengaluru",
+      "date": "2025-12-13T07:38:41.939Z",
+      "startTime": "14:00",
+      "duration": 2,
+      "chargerType": "Level 2",
+      "status": "upcoming",
+      "totalCost": "1320.00",
+      "stripePaymentId": "demo_payment_intent_1765611542251",
+      "personName": "luna",
+      "carModel": "Nissan Leaf",
+      "carNumber": "KA51MH1234",
+      "createdAt": "2025-12-13T07:39:02.567Z",
       "slotId": null
     }
   ]
