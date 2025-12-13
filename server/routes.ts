@@ -26,6 +26,7 @@ if (process.env.STRIPE_SECRET_KEY) {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log('registerRoutes: registering API routes');
+  console.log('[INFO] Server restarted. Data should be fresh if server_data.json was deleted.');
 
   // simple ping endpoint to verify API server is responding with JSON
   app.get('/api/ping', (_req, res) => res.json({ ok: true }));
@@ -193,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // If we found an "upcoming" one, also good.
           break;
         } else {
-          console.log(`   Booking ${booking.id} logic: NOW ${now.toLocaleTimeString()} vs Window ${entryStart.toLocaleTimeString()} - ${endDateTime.toLocaleTimeString()} -> OUT OF WINDOW`);
+          console.log(`   Booking ${booking.id} logic: NOW ${now.toLocaleString()} vs Window ${entryStart.toLocaleString()} - ${endDateTime.toLocaleString()} -> OUT OF WINDOW`);
         }
       }
 
@@ -429,6 +430,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (isSlotTaken) {
         return res.status(409).json({ error: "Time slot no longer available" });
+      }
+
+      // Check if THIS car already has a booking at this time
+      const isCarAlreadyBooked = existingBookings.some(
+        b => b.carNumber === validatedData.carNumber &&
+          b.startTime === validatedData.startTime &&
+          b.status !== "cancelled"
+      );
+
+      if (isCarAlreadyBooked) {
+        return res.status(409).json({ error: "This car is already booked for this slot" });
       }
 
       // Require login

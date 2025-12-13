@@ -1,33 +1,33 @@
 {
   "users": [
     {
-      "id": "dd276b2c-e027-4cdc-a211-5a33e4d6f2b0",
+      "id": "7e6c44de-5ce5-43e6-ab7e-c7e2e9a74ed1",
       "email": "luna@gmail.com",
-      "hashedPassword": "$2a$10$f8zs5hiGPdHfE6.wmt9KveDsF9y1v7o8MfsTO.4jSSCB0K9TuyFfa",
+      "hashedPassword": "$2a$10$ML9N3UDuJwpU8pWAgFyt0eD0AavI3czZHsu8J.y7UEJ72K.bQuDSO",
       "name": "luna",
-      "carModel": "Tesla Model Y",
+      "carModel": "Nissan Leaf",
       "carNumber": "RJ14CV0002",
-      "createdAt": "2025-12-10T03:13:41.756Z"
+      "createdAt": "2025-12-12T16:28:29.277Z"
     }
   ],
   "bookings": [
     {
-      "id": "02df6569-99d6-4bd5-8b68-ed48374b8a28",
+      "id": "570288eb-a465-4fad-ad80-c45d6e2035e1",
       "stationId": 1,
       "stationName": "Indiranagar Power Hub",
       "location": "100 Feet Rd, Indiranagar, Bengaluru",
-      "date": "2025-12-10T03:13:46.807Z",
-      "startTime": "08:00",
+      "date": "2025-12-12T18:30:00.000Z",
+      "startTime": "22:00",
       "duration": 2,
       "chargerType": "Level 2",
-      "status": "active",
+      "status": "upcoming",
       "totalCost": "1320.00",
-      "stripePaymentId": "demo_payment_intent_1765336446455",
+      "stripePaymentId": "demo_payment_intent_1765556970427",
       "personName": "luna",
-      "carModel": "Tesla Model Y",
+      "carModel": "Nissan Leaf",
       "carNumber": "RJ14CV0002",
-      "createdAt": "2025-12-10T03:14:06.464Z",
-      "slotId": 1
+      "createdAt": "2025-12-12T16:29:30.434Z",
+      "slotId": null
     }
   ]
 }
