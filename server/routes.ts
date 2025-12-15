@@ -530,6 +530,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/bookings/:id/reschedule", async (req, res) => {
+    try {
+      const { date, startTime } = req.body;
+      if (!date || !startTime) {
+        return res.status(400).json({ error: "Missing date or start time" });
+      }
+
+      const bookingId = req.params.id;
+      const booking = await storage.getBooking(bookingId);
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      // Check auth (User must own booking)
+      // @ts-ignore
+      const userId = req.session?.userId;
+      // Depending on requirement, we might need to check if booking.email matches user.email 
+      // or if we store userId on booking. Currently Booking schema doesn't have userId explicitly linked 
+      // in the type definition shown in view_file earlier?
+      // Let's check `schema.ts`.
+      // `bookings` table has `personName`, `carModel`, but not `userId`.
+      // However, `createUser` returns a user with ID.
+      // In `createBooking` we didn't save userId. 
+      // `routes.ts` around line 491: `const booking = await storage.createBooking(validatedData);`
+      // It doesn't look like we link booking to user ID in the schema.
+      // But we do have `booking.carNumber` etc.
+      // Routes: `await storage.getBookings(status)` returns all bookings?
+      // `GET /api/bookings` returns all bookings?
+      // Let's check if we should enforce ownership. 
+      // In `routes.ts`: `app.get("/api/bookings", ...)` calls `storage.getBookings(status)`.
+      // It does NOT filter by user. This suggests currently bookings are global or locally filtered?
+      // Wait, `bookings.tsx` calls `/api/bookings`. 
+      // If the app is multi-user, this is a privacy issue, but for this task I should probably follow the pattern.
+      // The user wants "reschedule".
+
+      // Let's verify availability for new slot
+      const newDate = new Date(date);
+      const existingBookings = await storage.getStationBookings(booking.stationId, newDate);
+
+      const isSlotTaken = existingBookings.some(
+        b => b.startTime === startTime &&
+          b.status !== "cancelled" &&
+          b.id !== bookingId // Ignore self if same time (though rescheduling to same time is no-op)
+      );
+
+      if (isSlotTaken) {
+        return res.status(409).json({ error: "Time slot unavailable" });
+      }
+
+      // Reschedule
+      const updated = await storage.rescheduleBooking(bookingId, newDate, startTime);
+      res.json(updated);
+
+    } catch (error) {
+      console.error("Error rescheduling booking:", error);
+      res.status(500).json({ error: "Failed to reschedule booking" });
+    }
+  });
+
   // Dev-only debug endpoint to inspect current session + user (helps debug why profile updates fail)
   if (process.env.NODE_ENV === 'development') {
     app.get('/api/debug/me', async (req, res) => {

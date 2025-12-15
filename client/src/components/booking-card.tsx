@@ -19,6 +19,7 @@ interface BookingCardProps {
   carModel?: string;
   carNumber?: string;
   onCancel?: () => void;
+  onReschedule?: () => void;
   onViewReceipt?: () => void;
 }
 
@@ -35,6 +36,7 @@ export function BookingCard({
   carModel,
   carNumber,
   onCancel,
+  onReschedule,
   onViewReceipt,
 }: BookingCardProps) {
   const getStatusBadge = () => {
@@ -91,14 +93,25 @@ export function BookingCard({
 
       <div className="flex flex-wrap gap-2">
         {status === "upcoming" && onCancel && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-            data-testid="button-cancel-booking"
-          >
-            Cancel Booking
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReschedule}
+              className="mr-2"
+              data-testid="button-reschedule-booking"
+            >
+              Reschedule
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              data-testid="button-cancel-booking"
+            >
+              Cancel Booking
+            </Button>
+          </>
         )}
         {status === "completed" && onViewReceipt && (
           <Button

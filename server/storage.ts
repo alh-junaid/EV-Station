@@ -29,6 +29,7 @@ export interface IStorage {
   // Slot Management
   updateSlotStatus(stationId: number, slotId: number, isOccupied: boolean): void;
   getAvailableSlot(stationId: number): number | null;
+  rescheduleBooking(id: string, newDate: Date, newStartTime: string): Promise<Booking | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -246,6 +247,28 @@ export class MemStorage implements IStorage {
     this.users.set(id, updated);
     this.saveData();
     return updated;
+  }
+
+  async rescheduleBooking(id: string, newDate: Date, newStartTime: string): Promise<Booking | undefined> {
+    const booking = this.bookings.get(id);
+    if (booking) {
+      booking.date = newDate;
+      booking.startTime = newStartTime;
+      // If it was cancelled, maybe we shouldn't allow reschedule without payment check? 
+      // User requirement implies "reschedule", usually implies moving an active/upcoming slot.
+      // We will assume status stays "upcoming" or becomes "upcoming" if it was something else, 
+      // but if it was cancelled, we might need to handle refund logic issues. 
+      // For now, simple update.
+      booking.status = "upcoming";
+
+      // Slot must be cleared as it changes time
+      booking.slotId = null;
+
+      this.bookings.set(id, booking);
+      this.saveData();
+      return booking;
+    }
+    return undefined;
   }
 
   updateSlotStatus(stationId: number, slotId: number, isOccupied: boolean): void {

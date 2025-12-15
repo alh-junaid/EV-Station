@@ -1,59 +1,77 @@
 {
   "users": [
     {
-      "id": "7e6c44de-5ce5-43e6-ab7e-c7e2e9a74ed1",
+      "id": "289a618e-d2e1-48a5-816b-deffd92b498b",
+      "email": "test_reschedule_1765613593608@example.com",
+      "hashedPassword": "$2a$10$EGtdCeNUKhYhJ4LfcTXOSO69DQ1ZlgoUceZ/Jp6OCQi/QADiykAEa",
+      "name": "Reschedule Test",
+      "carModel": "Test Car",
+      "carNumber": "TEST-01",
+      "createdAt": "2025-12-13T08:13:14.253Z"
+    },
+    {
+      "id": "a173730c-5263-4aa4-9783-b163957abbb4",
+      "email": "test_reschedule_1765613655533@example.com",
+      "hashedPassword": "$2a$10$Uxbxczh0YGmxf7YeXMlQZO1cWFJP9FauNRDjjQEiqqEl.eQ3raalC",
+      "name": "Reschedule Test",
+      "carModel": "Test Car",
+      "carNumber": "TEST-01",
+      "createdAt": "2025-12-13T08:14:15.889Z"
+    },
+    {
+      "id": "162f06b4-a144-45df-b24c-45f77eb9437a",
+      "email": "prabudhsagar.vv@gmail.com",
+      "hashedPassword": "$2a$10$YUSoBc3DkHQeToXL6iZ9mu3DUiq1JOfIH9dY8Vhhikmi4cvMBqnqS",
+      "name": "LED",
+      "carModel": "Tesla Model Y",
+      "carNumber": "KA51MH1234",
+      "createdAt": "2025-12-13T08:15:56.496Z"
+    },
+    {
+      "id": "64d161b8-8377-488e-98e4-1b12ab9330e5",
       "email": "luna@gmail.com",
-      "hashedPassword": "$2a$10$ML9N3UDuJwpU8pWAgFyt0eD0AavI3czZHsu8J.y7UEJ72K.bQuDSO",
+      "hashedPassword": "$2a$10$gbuwWNpQlsX9MAdV8QwALud5WYozFOOHUoGs9FVquhdH7cGuNC3yi",
       "name": "luna",
       "carModel": "Nissan Leaf",
       "carNumber": "RJ14CV0002",
-      "createdAt": "2025-12-12T16:28:29.277Z"
-    },
-    {
-      "id": "e03e32ea-c8ed-460c-ba25-aa4e6580ee40",
-      "email": "prabudhsagar.vv@gmail.com",
-      "hashedPassword": "$2a$10$HfyZdGuloapkCd6XVKI.OOJQdzMnndoxWDXAJbBuQX8aowuw/v84u",
-      "name": "luna",
-      "carModel": "Nissan Leaf",
-      "carNumber": "KA51MH1234",
-      "createdAt": "2025-12-13T07:38:29.131Z"
+      "createdAt": "2025-12-15T02:51:44.875Z"
     }
   ],
   "bookings": [
     {
-      "id": "570288eb-a465-4fad-ad80-c45d6e2035e1",
+      "id": "62e880c1-99d4-4904-bacf-5e1c86820898",
       "stationId": 1,
       "stationName": "Indiranagar Power Hub",
       "location": "100 Feet Rd, Indiranagar, Bengaluru",
-      "date": "2025-12-12T18:30:00.000Z",
-      "startTime": "22:00",
+      "date": "2025-12-18T18:30:00.000Z",
+      "startTime": "18:00",
       "duration": 2,
       "chargerType": "Level 2",
       "status": "upcoming",
       "totalCost": "1320.00",
-      "stripePaymentId": "demo_payment_intent_1765556970427",
-      "personName": "luna",
-      "carModel": "Nissan Leaf",
-      "carNumber": "RJ14CV0002",
-      "createdAt": "2025-12-12T16:29:30.434Z",
+      "stripePaymentId": "demo_payment_intent_1765613783058",
+      "personName": "LED",
+      "carModel": "Tesla Model Y",
+      "carNumber": "KA51MH1234",
+      "createdAt": "2025-12-13T08:16:23.099Z",
       "slotId": null
     },
     {
-      "id": "c646cc68-6879-484e-a3de-aa1b35631059",
+      "id": "d4f1b528-a6d1-4c67-8c51-e90c2c7dd437",
       "stationId": 1,
       "stationName": "Indiranagar Power Hub",
       "location": "100 Feet Rd, Indiranagar, Bengaluru",
-      "date": "2025-12-13T07:38:41.939Z",
-      "startTime": "14:00",
+      "date": "2025-12-15T02:51:49.426Z",
+      "startTime": "08:00",
       "duration": 2,
       "chargerType": "Level 2",
       "status": "upcoming",
       "totalCost": "1320.00",
-      "stripePaymentId": "demo_payment_intent_1765611542251",
+      "stripePaymentId": "demo_payment_intent_1765767128976",
       "personName": "luna",
       "carModel": "Nissan Leaf",
-      "carNumber": "KA51MH1234",
-      "createdAt": "2025-12-13T07:39:02.567Z",
+      "carNumber": "RJ14CV0002",
+      "createdAt": "2025-12-15T02:52:08.986Z",
       "slotId": null
     }
   ]
