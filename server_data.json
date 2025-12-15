@@ -73,6 +73,24 @@
       "carNumber": "RJ14CV0002",
       "createdAt": "2025-12-15T02:52:08.986Z",
       "slotId": 1
+    },
+    {
+      "id": "067d8eca-f58c-4d1f-8631-fc8982c8c5dc",
+      "stationId": 1,
+      "stationName": "Indiranagar Power Hub",
+      "location": "100 Feet Rd, Indiranagar, Bengaluru",
+      "date": "2025-12-15T07:08:23.297Z",
+      "startTime": "12:00",
+      "duration": 2,
+      "chargerType": "Level 2",
+      "status": "upcoming",
+      "totalCost": "1320.00",
+      "stripePaymentId": "demo_payment_intent_1765782522586",
+      "personName": "luna",
+      "carModel": "Nissan Leaf",
+      "carNumber": "RJ14CV0002",
+      "createdAt": "2025-12-15T07:08:42.909Z",
+      "slotId": null
     }
   ]
 }
