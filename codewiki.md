@@ -17,28 +17,28 @@ The system follows a modular architecture connecting a cloud-based web applicati
 ```mermaid
 graph TD
     subgraph "Client Side"
-        Browser[Web Browser (React App)]
+        Browser["Web Browser (React App)"]
     end
 
     subgraph "Server Side"
         API[Express API Server]
         Auth[Passport Auth]
         WS[WebSocket Server]
-        DB[(Neon PostgreSQL DB)]
+        DB[("Neon PostgreSQL DB")]
     end
 
     subgraph "Hardware (Edge)"
-        Cam[Camera Script (Python/OCR)]
+        Cam["Camera Script (Python/OCR)"]
         ESP[ESP32 Microcontroller]
-        Sensors[IR Sensors/Gates]
+        Sensors["IR Sensors/Gates"]
     end
 
     Browser <-->|HTTP/REST| API
     Browser <-->|WebSocket| WS
-    API <--> input/output DB
+    API <-->|Read/Write| DB
     
-    Cam -->|HTTP POST (Plate Data)| API
-    ESP -->|HTTP POST (Sensor Data)| API
+    Cam -->|"HTTP POST (Plate Data)"| API
+    ESP -->|"HTTP POST (Sensor Data)"| API
     ESP <-->|GPIO| Sensors
 ```
 
