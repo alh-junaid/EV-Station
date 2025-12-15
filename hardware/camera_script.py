@@ -12,6 +12,10 @@ from datetime import datetime
 # Force UTF-8 encoding for stdout (helps, but we will also remove emojis to be safe)
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# Suppress PyTorch/EasyOCR warning about pinned memory on CPU
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.utils.data.dataloader")
+
 # Check for OCR flag
 ENABLE_OCR = os.environ.get('ENABLE_OCR', '0') == '1' or '--ocr' in sys.argv
 
@@ -411,12 +415,12 @@ def process_frame_with_retry(frame):
         saved_file = save_image(frame, f"attempt{attempt}")
         
         # Try to detect plate
-        plate_number = detect_plate(frame)
+        candidates = detect_plate(frame)
         
-        if plate_number:
-            log(f"[SUCCESS] Plate detected: {plate_number}")
+        if candidates:
+            log(f"[SUCCESS] Candidates detected: {candidates}")
             # Check booking
-            check_booking(plate_number)
+            check_booking(candidates)
             return True
         else:
             log(f"[FAIL] No plate detected in attempt {attempt}")
@@ -523,13 +527,12 @@ def detect_plate(frame):
     if reader is None:
         log('[WARN] OCR disabled or not available. Skipping text detection.')
         log('[INFO] To enable OCR: pip install easyocr && set ENABLE_OCR=1')
-        return None
+        return []
 
     log("[INFO] Running OCR (trying multiple filters)...")
     
-    best_text = None
-    best_conf = 0.0
-    best_is_plate = False # Track if we found a "perfect" plate structure
+    candidates = []
+    seen_candidates = set()
     
     variants = get_preprocessed_variants(frame)
     
@@ -560,40 +563,53 @@ def detect_plate(frame):
             
             log(f"  [{name}] Found: '{clean_text}' -> '{cleaned_plate}' (conf: {prob:.2f}) {'[PLATE MATCH]' if is_plate_structure else ''}")
             
-            # Priority Logic:
-            # 1. Prefer "Plate Structure" matches over everything else
-            # 2. Prefer Length 10 (Standard) over others
-            # 3. Take higher confidence
+            # Collection Logic:
+            # Collect if:
+            # 1. Matches Plate Structure
+            # 2. High confidence (> 0.4)
             
-            # Boost confidence for perfect length matches
-            adjusted_conf = prob
-            if len(cleaned_plate) == 10:
-                adjusted_conf += 0.2
-            
+            should_add = False
             if is_plate_structure:
-                if not best_is_plate or adjusted_conf > best_conf:
-                    best_conf = adjusted_conf
-                    best_text = cleaned_plate
-                    best_is_plate = True
-            elif not best_is_plate:
-                if adjusted_conf > best_conf:
-                    best_conf = adjusted_conf
-                    best_text = cleaned_plate
+                should_add = True
+            elif prob > 0.4 and len(cleaned_plate) >= 8: # Arbitrary confidence threshold for non-perfect structures
+                should_add = True
+                
+            if should_add and cleaned_plate not in seen_candidates:
+                candidates.append(cleaned_plate)
+                seen_candidates.add(cleaned_plate)
+
+    # Sort candidates by structure match (prioritize regex match)? 
+    # For now, just sending all of them is fine, server checks all.
+    # But maybe we want to identify the "best" one for logging?
     
-    # If we found something decent, return it
-    if best_text:
-        log(f"[SUCCESS] Best candidate: {best_text} (conf: {best_conf:.2f})")
-        return best_text
+    if candidates:
+        log(f"[SUCCESS] Candidates found: {candidates}")
+        return candidates
         
     log("[FAIL] No valid plate detected in any variant")
-    return None
+    return []
 
-def check_booking(plate_number):
+def check_booking(candidates):
     """Check with server if plate is authorized"""
-    log(f"[INFO] Checking booking for plate: {plate_number}")
+    # If called with string (error case logic from main), wrap in list
+    if isinstance(candidates, str):
+        candidates = [candidates]
+        
+    if not candidates:
+        return
+
+    # Use first candidate as "primary" for logging/compatibility
+    primary_plate = candidates[0]
+    
+    log(f"[INFO] Checking booking for candidates: {candidates}")
     try:
         url = f"{SERVER_URL}/api/hardware/identify"
-        payload = {"stationId": STATION_ID, "plateNumber": plate_number}
+        # Send both plateNumber (best guess) and candidates list
+        payload = {
+            "stationId": STATION_ID, 
+            "plateNumber": primary_plate,
+            "candidates": candidates
+        }
         response = requests.post(url, json=payload, timeout=5)
         
         log(f"[INFO] Server response: {response.status_code}")
@@ -604,7 +620,7 @@ def check_booking(plate_number):
                 log(f"       Booking ID: {data.get('bookingId')}")
             else:
                 log("[AUTH] 🚫 NOT AUTHORIZED")
-                log(f"       No valid booking for: {plate_number}")
+                log(f"       No valid booking for: {candidates}")
         else:
             log(f"[ERR] Server error: {response.text}")
             

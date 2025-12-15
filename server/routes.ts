@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupWebSocket, getWebSocketHandler } from "./websocket";
-import { insertBookingSchema } from "@shared/schema";
+import { insertBookingSchema, type Booking } from "@shared/schema";
 import Stripe from "stripe";
 // @ts-ignore
 import bcrypt from "bcryptjs";
@@ -134,10 +134,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const summary = [];
 
       for (const station of stations) {
+        // Total slots per day (12 hours * 3 connectors)
+        const totalSlots = 36;
         const bookings = await storage.getStationBookings(station.id, date);
-        // Total slots per day (assuming 24h operation, 2h slots) = 12 slots * 1 charger (simplified)
-        // If station has multiple chargers, multiply. For now, assuming 1 slot per time block.
-        const totalSlots = 12; // 00:00 - 22:00
         const bookedCount = bookings.filter(b => b.status !== 'cancelled').length;
 
         let status = "High Availability";
@@ -165,10 +164,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Hardware/Camera endpoints
   app.post("/api/hardware/identify", async (req, res) => {
     try {
-      const { stationId, plateNumber } = req.body;
-      console.log(`Identify request: Station ${stationId}, Plate ${plateNumber}`);
+      const { stationId, plateNumber, candidates } = req.body;
+      console.log(`Identify request: Station ${stationId}, Plate ${plateNumber}, Candidates: ${candidates?.join(', ')}`);
 
-      if (!stationId || !plateNumber) {
+      if (!stationId || (!plateNumber && (!candidates || candidates.length === 0))) {
         return res.status(400).json({ error: "Missing fields" });
       }
 
@@ -180,12 +179,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send SCANNING status to LCD
       const ws = getWebSocketHandler();
       if (ws) {
-        ws.sendCommandToESP32(stationId, "SCANNING", { plateNumber });
+        ws.sendCommandToESP32(stationId, "SCANNING", { plateNumber: plateNumber || (candidates ? candidates[0] : "???") });
       }
 
-      // Check if there is a valid booking
-      const bookings = await storage.getBookingsByPlate(plateNumber);
-      console.log(`📋 Found ${bookings.length} booking(s) for plate ${plateNumber}`);
+      // Look up bookings for ALL candidates
+      let bookings: Booking[] = [];
+      const platesToCheck = candidates && candidates.length > 0 ? candidates : [plateNumber];
+
+      console.log(`🔍 Checking plates: ${platesToCheck.join(', ')}`);
+
+      // Use a set to avoid duplicates if multiple candidates match same booking (unlikely but safe)
+      const bookingIds = new Set();
+
+      for (const plate of platesToCheck) {
+        const matches = await storage.getBookingsByPlate(plate);
+        for (const b of matches) {
+          if (!bookingIds.has(b.id)) {
+            bookings.push(b);
+            bookingIds.add(b.id);
+          }
+        }
+      }
+
+      console.log(`📋 Found ${bookings.length} booking(s) across candidates`);
 
       const now = new Date();
       let validBooking: typeof bookings[0] | undefined;
@@ -326,8 +342,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const date = new Date(dateStr);
       const bookings = await storage.getStationBookings(id, date);
 
-      // Return booked time slots
-      const bookedSlots = bookings.map(b => b.startTime);
+      // Return booked time slots (only if ALL 3 slots are taken)
+      const slotCounts: Record<string, number> = {};
+      bookings.forEach(b => {
+        if (b.status !== 'cancelled') {
+          slotCounts[b.startTime] = (slotCounts[b.startTime] || 0) + 1;
+        }
+      });
+
+      const bookedSlots = Object.entries(slotCounts)
+        .filter(([_, count]) => count >= 3)
+        .map(([time, _]) => time);
 
       // Filter out past slots if date is today
       const now = new Date();
@@ -462,11 +487,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validatedData.date
       );
 
-      const isSlotTaken = existingBookings.some(
+      const bookingsAtTime = existingBookings.filter(
         b => b.startTime === validatedData.startTime && b.status !== "cancelled"
       );
 
-      if (isSlotTaken) {
+      // We have 3 slots per station
+      if (bookingsAtTime.length >= 3) {
         return res.status(409).json({ error: "Time slot no longer available" });
       }
 
