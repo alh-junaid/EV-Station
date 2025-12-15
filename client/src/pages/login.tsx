@@ -19,8 +19,16 @@ export default function Login() {
     e.preventDefault();
     try {
       if (isRegister) {
+        if (!email || !password || !name) {
+          alert("Please fill in all required fields.");
+          return;
+        }
         await register.mutateAsync({ email, password, name, carModel, carNumber });
       } else {
+        if (!email || !password) {
+          alert("Please enter email and password.");
+          return;
+        }
         await login.mutateAsync({ email, password });
       }
       setLocation("/");
@@ -48,7 +56,7 @@ export default function Login() {
         {isRegister && (
           <div className="mb-3">
             <Label htmlFor="name">Full name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
         )}
         {isRegister && (
@@ -75,15 +83,15 @@ export default function Login() {
         )}
         <div className="mb-3">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
         <div className="mb-3">
           <Label htmlFor="password">Password</Label>
-          <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
         <div className="flex items-center gap-2 mb-3">
           <Button type="submit">{isRegister ? "Register" : "Login"}</Button>
-          <Button variant="ghost" onClick={() => setIsRegister(!isRegister)}>
+          <Button type="button" variant="ghost" onClick={() => setIsRegister(!isRegister)}>
             {isRegister ? "Have an account? Login" : "Create account"}
           </Button>
         </div>

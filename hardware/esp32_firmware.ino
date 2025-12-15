@@ -29,11 +29,16 @@ Preferences preferences;
 bool isGateOpen = false;
 unsigned long gateOpenTime = 0;
 const unsigned long GATE_OPEN_DURATION = 5000;
+bool isScanning = false;
+unsigned long scanStartTime = 0;
+const unsigned long SCAN_TIMEOUT = 10000; // Reset scanning after 10s if no response
 
 // Debounce
 unsigned long lastDebounceTime[4] = {0, 0, 0, 0};
 int lastSensorState[4] = {HIGH, HIGH, HIGH, HIGH};
 const unsigned long DEBOUNCE_DELAY = 200;
+bool lastEntranceState = HIGH;
+unsigned long lastEntranceDebounceTime = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -81,6 +86,12 @@ void loop() {
   // Handle Gate Auto-Close
   if (isGateOpen && millis() - gateOpenTime > GATE_OPEN_DURATION) {
     closeGate();
+  }
+
+  // Handle Scan Timeout
+  if (isScanning && millis() - scanStartTime > SCAN_TIMEOUT) {
+    isScanning = false;
+    resetLCD();
   }
 
   // Read Sensors
@@ -173,19 +184,47 @@ void checkSensor(int pin, int slotId, int index) {
 
 void checkEntranceSensor() {
   int reading = digitalRead(IR_ENTRANCE_PIN);
-  if (reading == LOW) { 
-     lcd.clear();
-     lcd.setCursor(0, 0);
-     lcd.print("Car Detected");
-     lcd.setCursor(0, 1);
-     lcd.print("Scanning...");
-     
-     String json = "{\"type\":\"CAMERA_TRIGGER\", \"stationId\": " + String(STATION_ID) + "}";
-     webSocket.sendTXT(json);
-     
-     delay(3000); 
-     if (!isGateOpen) resetLCD();
+  
+  if (reading != lastEntranceState) {
+    lastEntranceDebounceTime = millis();
   }
+  
+  if ((millis() - lastEntranceDebounceTime) > DEBOUNCE_DELAY) {
+    // If state has changed
+    if (reading == LOW && !isGateOpen) { // Only trigger if gate is closed
+       // Only trigger once when it goes LOW
+       // But we need to make sure we don't re-trigger if it stays LOW?
+       // The logic above `reading != lastEntranceState` handles the transition.
+       // Wait, no. If reading is LOW and stable, this block runs every loop.
+       // I need a separate "triggered" flag or just compare to a stored "stable" state.
+    }
+  }
+  
+  // Simplified logic: Just check if it went LOW and wasn't LOW before (after debounce)
+  // Actually, let's just use a simple state check like the other sensors.
+  static int stableEntranceState = HIGH;
+  
+  if ((millis() - lastEntranceDebounceTime) > DEBOUNCE_DELAY) {
+    if (reading != stableEntranceState) {
+      stableEntranceState = reading;
+      
+      if (stableEntranceState == LOW && !isScanning && !isGateOpen) {
+         isScanning = true;
+         scanStartTime = millis();
+         
+         lcd.clear();
+         lcd.setCursor(0, 0);
+         lcd.print("Car Detected");
+         lcd.setCursor(0, 1);
+         lcd.print("Please wait...");
+         
+         String json = "{\"type\":\"CAMERA_TRIGGER\", \"stationId\": " + String(STATION_ID) + "}";
+         webSocket.sendTXT(json);
+      }
+    }
+  }
+  
+  lastEntranceState = reading;
 }
 
 void sendSlotUpdate(int slotId, bool isOccupied) {
@@ -199,19 +238,20 @@ void sendSlotUpdate(int slotId, bool isOccupied) {
   }
 }
 
-void openGate(String userName) {
+void openGate(String userName, int slotId) {
   Serial.println("Opening Gate");
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Welcome");
+  lcd.print("Welcome " + userName.substring(0, 8));
   lcd.setCursor(0, 1);
-  if (userName.length() > 0) {
-    lcd.print(userName.substring(0, 16)); 
+  if (slotId > 0) {
+    lcd.print("Go to Slot " + String(slotId)); 
   } else {
     lcd.print("Authorized");
   }
   gateServo.write(90); 
   isGateOpen = true;
+  isScanning = false; // Stop scanning mode
   gateOpenTime = millis();
 }
 
@@ -222,6 +262,7 @@ void denyAccess() {
   lcd.print("Access Denied");
   lcd.setCursor(0, 1);
   lcd.print("Not Booked");
+  isScanning = false; // Stop scanning mode
   delay(3000);
   resetLCD();
 }
@@ -247,12 +288,22 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       String msg = (char*)payload;
       if (msg.indexOf("GATE_OPEN") >= 0) {
         String name = "";
+        int slotId = 0;
+        
         int nameIdx = msg.indexOf("\"name\":\"");
         if (nameIdx > 0) {
            int endIdx = msg.indexOf("\"", nameIdx + 8);
            name = msg.substring(nameIdx + 8, endIdx);
         }
-        openGate(name);
+        
+        int slotIdx = msg.indexOf("\"slotId\":");
+        if (slotIdx > 0) {
+           // Simple parse, assuming it's followed by number and comma or brace
+           String slotStr = msg.substring(slotIdx + 9);
+           slotId = slotStr.toInt();
+        }
+        
+        openGate(name, slotId);
       } else if (msg.indexOf("GATE_DENIED") >= 0) {
         denyAccess();
       }

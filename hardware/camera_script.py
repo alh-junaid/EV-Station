@@ -12,6 +12,10 @@ from datetime import datetime
 # Force UTF-8 encoding for stdout (helps, but we will also remove emojis to be safe)
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# Suppress PyTorch/EasyOCR warning about pinned memory on CPU
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.utils.data.dataloader")
+
 # Check for OCR flag
 ENABLE_OCR = os.environ.get('ENABLE_OCR', '0') == '1' or '--ocr' in sys.argv
 
@@ -39,7 +43,119 @@ except Exception as e:
 SERVER_URL = "http://localhost:5000"
 WS_URL = "ws://localhost:5000/ws"
 STATION_ID = 1
-CAMERA_ID = 0 # Default USB camera
+
+# CAMERA selection:
+# - If `CAMERA_ID` env var is set or `--camera N` passed, use that.
+# - Otherwise try indices 1..5 first (USB cams are often not index 0),
+#   then fall back to 0 (built-in) if nothing else opens.
+def parse_camera_id():
+    # CLI override: --camera N
+    if '--camera' in sys.argv:
+        try:
+            idx = sys.argv.index('--camera')
+            return int(sys.argv[idx + 1])
+        except Exception:
+            pass
+
+    # Config file override (saved selection)
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), 'camera_config.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as cf:
+                import json as _json
+                cfg = _json.load(cf)
+                if 'camera_id' in cfg:
+                    return int(cfg['camera_id'])
+    except Exception:
+        pass
+
+    # Env override
+    try:
+        env_val = os.environ.get('CAMERA_ID')
+        if env_val is not None:
+            return int(env_val)
+    except Exception:
+        pass
+
+    # Auto-scan: prefer indices 1..5, then 0
+    def probe(index):
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW if hasattr(cv2, 'CAP_DSHOW') else 0)
+        if not cap.isOpened():
+            cap.release()
+            return False
+        # try to grab a frame
+        ret, _ = cap.read()
+        cap.release()
+        return bool(ret)
+
+    for i in range(1, 6):
+        try:
+            if probe(i):
+                return i
+        except Exception:
+            continue
+
+    # fallback to 0
+    return 0
+
+CAMERA_ID = parse_camera_id()
+    
+
+def list_cameras(max_index: int = 10):
+    """Probe camera indices 0..max_index and print which ones can be opened.
+
+    Returns a dict of index -> boolean (True if probe succeeded).
+    """
+    results = {}
+    for i in range(0, max_index + 1):
+        try:
+            cap = cv2.VideoCapture(i, cv2.CAP_DSHOW if hasattr(cv2, 'CAP_DSHOW') else 0)
+            ok = False
+            if cap.isOpened():
+                ret, _ = cap.read()
+                ok = bool(ret)
+            if cap.isOpened():
+                cap.release()
+            results[i] = ok
+        except Exception:
+            results[i] = False
+    print("Camera probe results:")
+    for idx, ok in results.items():
+        print(f"  index {idx}: {'OK' if ok else 'no'}")
+    return results
+
+# If user asked to list cameras, do it and exit early.
+if '--list-cameras' in sys.argv:
+    list_cameras(10)
+    sys.exit(0)
+
+# Interactive selection: show cameras, let user pick, save to `hardware/camera_config.json`.
+if '--select-camera' in sys.argv:
+    res = list_cameras(10)
+    ok_indices = [i for i, ok in res.items() if ok]
+    if not ok_indices:
+        print('No cameras detected. Please plug in your USB camera and try again.')
+        sys.exit(1)
+    print('\nDetected camera indices:', ok_indices)
+    try:
+        sel = input('Enter camera index to use as default (or press Enter to cancel): ').strip()
+        if sel == '':
+            print('Selection cancelled.')
+            sys.exit(0)
+        sel_i = int(sel)
+        if sel_i not in ok_indices:
+            print(f'Index {sel_i} did not probe OK. Aborting.')
+            sys.exit(1)
+        cfg = {'camera_id': sel_i}
+        config_path = os.path.join(os.path.dirname(__file__), 'camera_config.json')
+        with open(config_path, 'w', encoding='utf-8') as cf:
+            import json as _json
+            _json.dump(cfg, cf)
+        print(f'Saved default camera index {sel_i} to {config_path}')
+        sys.exit(0)
+    except Exception as e:
+        print('Error during selection:', e)
+        sys.exit(1)
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
 
@@ -225,20 +341,7 @@ def heuristic_clean(text):
             return prefix + new_suffix
             
     return clean
-
-# --- CONFIGURATION ---
-SERVER_URL = "http://localhost:5000"
-WS_URL = "ws://localhost:5000/ws"
-STATION_ID = 1
-CAMERA_ID = 0 # Default USB camera
-MAX_RETRIES = 3
-RETRY_DELAY = 2  # seconds
-
-# Create captures directory
-CAPTURES_DIR = "captures"
-if not os.path.exists(CAPTURES_DIR):
-    os.makedirs(CAPTURES_DIR)
-    print(f"✓ Created {CAPTURES_DIR}/ directory")
+# Duplicate configuration block removed — using values defined earlier.
 
 # --- STATE ---
 should_capture = False
@@ -312,12 +415,12 @@ def process_frame_with_retry(frame):
         saved_file = save_image(frame, f"attempt{attempt}")
         
         # Try to detect plate
-        plate_number = detect_plate(frame)
+        candidates = detect_plate(frame)
         
-        if plate_number:
-            log(f"[SUCCESS] Plate detected: {plate_number}")
+        if candidates:
+            log(f"[SUCCESS] Candidates detected: {candidates}")
             # Check booking
-            check_booking(plate_number)
+            check_booking(candidates)
             return True
         else:
             log(f"[FAIL] No plate detected in attempt {attempt}")
@@ -326,6 +429,8 @@ def process_frame_with_retry(frame):
                 time.sleep(RETRY_DELAY)
     
     log("[FAIL] No plate detected after 3 attempts")
+    # Notify server of failure so LCD can be reset (GATE_DENIED)
+    check_booking("NO_PLATE_DETECTED")
     log("="*60)
     return False
 
@@ -422,13 +527,12 @@ def detect_plate(frame):
     if reader is None:
         log('[WARN] OCR disabled or not available. Skipping text detection.')
         log('[INFO] To enable OCR: pip install easyocr && set ENABLE_OCR=1')
-        return None
+        return []
 
     log("[INFO] Running OCR (trying multiple filters)...")
     
-    best_text = None
-    best_conf = 0.0
-    best_is_plate = False # Track if we found a "perfect" plate structure
+    candidates = []
+    seen_candidates = set()
     
     variants = get_preprocessed_variants(frame)
     
@@ -459,40 +563,53 @@ def detect_plate(frame):
             
             log(f"  [{name}] Found: '{clean_text}' -> '{cleaned_plate}' (conf: {prob:.2f}) {'[PLATE MATCH]' if is_plate_structure else ''}")
             
-            # Priority Logic:
-            # 1. Prefer "Plate Structure" matches over everything else
-            # 2. Prefer Length 10 (Standard) over others
-            # 3. Take higher confidence
+            # Collection Logic:
+            # Collect if:
+            # 1. Matches Plate Structure
+            # 2. High confidence (> 0.4)
             
-            # Boost confidence for perfect length matches
-            adjusted_conf = prob
-            if len(cleaned_plate) == 10:
-                adjusted_conf += 0.2
-            
+            should_add = False
             if is_plate_structure:
-                if not best_is_plate or adjusted_conf > best_conf:
-                    best_conf = adjusted_conf
-                    best_text = cleaned_plate
-                    best_is_plate = True
-            elif not best_is_plate:
-                if adjusted_conf > best_conf:
-                    best_conf = adjusted_conf
-                    best_text = cleaned_plate
+                should_add = True
+            elif prob > 0.4 and len(cleaned_plate) >= 8: # Arbitrary confidence threshold for non-perfect structures
+                should_add = True
+                
+            if should_add and cleaned_plate not in seen_candidates:
+                candidates.append(cleaned_plate)
+                seen_candidates.add(cleaned_plate)
+
+    # Sort candidates by structure match (prioritize regex match)? 
+    # For now, just sending all of them is fine, server checks all.
+    # But maybe we want to identify the "best" one for logging?
     
-    # If we found something decent, return it
-    if best_text:
-        log(f"[SUCCESS] Best candidate: {best_text} (conf: {best_conf:.2f})")
-        return best_text
+    if candidates:
+        log(f"[SUCCESS] Candidates found: {candidates}")
+        return candidates
         
     log("[FAIL] No valid plate detected in any variant")
-    return None
+    return []
 
-def check_booking(plate_number):
+def check_booking(candidates):
     """Check with server if plate is authorized"""
-    log(f"[INFO] Checking booking for plate: {plate_number}")
+    # If called with string (error case logic from main), wrap in list
+    if isinstance(candidates, str):
+        candidates = [candidates]
+        
+    if not candidates:
+        return
+
+    # Use first candidate as "primary" for logging/compatibility
+    primary_plate = candidates[0]
+    
+    log(f"[INFO] Checking booking for candidates: {candidates}")
     try:
         url = f"{SERVER_URL}/api/hardware/identify"
-        payload = {"stationId": STATION_ID, "plateNumber": plate_number}
+        # Send both plateNumber (best guess) and candidates list
+        payload = {
+            "stationId": STATION_ID, 
+            "plateNumber": primary_plate,
+            "candidates": candidates
+        }
         response = requests.post(url, json=payload, timeout=5)
         
         log(f"[INFO] Server response: {response.status_code}")
@@ -503,7 +620,7 @@ def check_booking(plate_number):
                 log(f"       Booking ID: {data.get('bookingId')}")
             else:
                 log("[AUTH] 🚫 NOT AUTHORIZED")
-                log(f"       No valid booking for: {plate_number}")
+                log(f"       No valid booking for: {candidates}")
         else:
             log(f"[ERR] Server error: {response.text}")
             

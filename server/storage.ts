@@ -1,5 +1,9 @@
 import { type Station, type InsertStation, type Booking, type InsertBooking } from "@shared/schema";
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
+
+const DATA_FILE = path.join(process.cwd(), "server_data.json");
 
 export interface IStorage {
   // Stations
@@ -12,6 +16,7 @@ export interface IStorage {
   getBooking(id: string): Promise<Booking | undefined>;
   createBooking(booking: InsertBooking): Promise<Booking>;
   updateBookingStatus(id: string, status: string): Promise<Booking | undefined>;
+  assignSlotToBooking(id: string, slotId: number): Promise<Booking | undefined>;
   getStationBookings(stationId: number, date: Date): Promise<Booking[]>;
   getBookingsByPlate(plateNumber: string): Promise<Booking[]>;
 
@@ -20,6 +25,11 @@ export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   createUser(email: string, hashedPassword: string, name?: string, carModel?: string, carNumber?: string): Promise<User>;
   updateUser(id: string, data: { name?: string | null; carModel?: string | null; carNumber?: string | null }): Promise<User | undefined>;
+
+  // Slot Management
+  updateSlotStatus(stationId: number, slotId: number, isOccupied: boolean): void;
+  getAvailableSlot(stationId: number): number | null;
+  rescheduleBooking(id: string, newDate: Date, newStartTime: string): Promise<Booking | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -27,13 +37,65 @@ export class MemStorage implements IStorage {
   private stations: Map<number, Station>;
   private bookings: Map<string, Booking>;
   private stationIdCounter: number;
+  private slotStates: Map<number, Map<number, boolean>>; // stationId -> slotId -> isOccupied
 
   constructor() {
     this.stations = new Map();
     this.bookings = new Map();
     this.stationIdCounter = 1;
     this.users = new Map();
-    this.seedData();
+    this.slotStates = new Map();
+
+    // Try to load from file
+    if (fs.existsSync(DATA_FILE)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+
+        // Restore Users
+        if (data.users) {
+          data.users.forEach((u: any) => {
+            // Fix dates
+            u.createdAt = new Date(u.createdAt);
+            this.users.set(u.id, u);
+          });
+        }
+
+        // Restore Bookings
+        if (data.bookings) {
+          data.bookings.forEach((b: any) => {
+            b.date = new Date(b.date);
+            b.createdAt = new Date(b.createdAt);
+            this.bookings.set(b.id, b);
+          });
+        }
+
+        // Restore Stations (if any custom ones were added, though we seed them)
+        // For now, let's just re-seed stations to keep it simple, or load them if we want persistence there too.
+        // Let's re-seed to ensure defaults, but maybe we should persist them if we allowed creating stations.
+        // We'll just seed defaults if empty.
+
+        console.log(`[Storage] Loaded ${this.users.size} users and ${this.bookings.size} bookings from file.`);
+      } catch (e) {
+        console.error("[Storage] Failed to load data file:", e);
+      }
+    }
+
+    if (this.stations.size === 0) {
+      this.seedData();
+    }
+  }
+
+  private saveData() {
+    try {
+      const data = {
+        users: Array.from(this.users.values()),
+        bookings: Array.from(this.bookings.values()),
+        // We don't save stations for now as they are static/seeded
+      };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.error("[Storage] Failed to save data:", e);
+    }
   }
 
   private seedData() {
@@ -87,8 +149,8 @@ export class MemStorage implements IStorage {
     const station: Station = {
       ...(insertStation as any),
       id,
-      latitude: insertStation.latitude ?? null,
-      longitude: insertStation.longitude ?? null,
+      latitude: (insertStation as any).latitude ?? null,
+      longitude: (insertStation as any).longitude ?? null,
     };
     this.stations.set(id, station);
     return station;
@@ -114,8 +176,10 @@ export class MemStorage implements IStorage {
       status: insertBooking.status ?? "upcoming",
       stripePaymentId: insertBooking.stripePaymentId ?? null,
       createdAt: new Date(),
+      slotId: null, // Default to null, assigned on entry
     };
     this.bookings.set(id, booking);
+    this.saveData();
     return booking;
   }
 
@@ -124,6 +188,18 @@ export class MemStorage implements IStorage {
     if (booking) {
       booking.status = status;
       this.bookings.set(id, booking);
+      this.saveData();
+      return booking;
+    }
+    return undefined;
+  }
+
+  async assignSlotToBooking(id: string, slotId: number): Promise<Booking | undefined> {
+    const booking = this.bookings.get(id);
+    if (booking) {
+      booking.slotId = slotId;
+      this.bookings.set(id, booking);
+      this.saveData();
       return booking;
     }
     return undefined;
@@ -155,6 +231,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const user: User = { id, email, hashedPassword, name: name ?? null, carModel: carModel ?? null, carNumber: carNumber ?? null, createdAt: new Date() };
     this.users.set(id, user);
+    this.saveData();
     return user;
   }
 
@@ -168,7 +245,57 @@ export class MemStorage implements IStorage {
       carNumber: data.carNumber === undefined ? user.carNumber : data.carNumber,
     };
     this.users.set(id, updated);
+    this.saveData();
     return updated;
+  }
+
+  async rescheduleBooking(id: string, newDate: Date, newStartTime: string): Promise<Booking | undefined> {
+    const booking = this.bookings.get(id);
+    if (booking) {
+      booking.date = newDate;
+      booking.startTime = newStartTime;
+      // If it was cancelled, maybe we shouldn't allow reschedule without payment check? 
+      // User requirement implies "reschedule", usually implies moving an active/upcoming slot.
+      // We will assume status stays "upcoming" or becomes "upcoming" if it was something else, 
+      // but if it was cancelled, we might need to handle refund logic issues. 
+      // For now, simple update.
+      booking.status = "upcoming";
+
+      // Slot must be cleared as it changes time
+      booking.slotId = null;
+
+      this.bookings.set(id, booking);
+      this.saveData();
+      return booking;
+    }
+    return undefined;
+  }
+
+  updateSlotStatus(stationId: number, slotId: number, isOccupied: boolean): void {
+    if (!this.slotStates.has(stationId)) {
+      this.slotStates.set(stationId, new Map());
+    }
+    this.slotStates.get(stationId)!.set(slotId, isOccupied);
+    console.log(`[Storage] Updated Station ${stationId} Slot ${slotId} -> ${isOccupied ? 'Occupied' : 'Free'}`);
+  }
+
+  getAvailableSlot(stationId: number): number | null {
+    // Assuming 3 slots for now (1, 2, 3)
+    // If we had dynamic slots per station, we'd need to store that config.
+    // For now, hardcode 1-3 check.
+    const stationSlots = this.slotStates.get(stationId);
+    if (!stationSlots) {
+      // If no data, assume all free? Or wait for update?
+      // Let's assume 1 is free if no data.
+      return 1;
+    }
+
+    for (let i = 1; i <= 3; i++) {
+      if (!stationSlots.get(i)) { // If false or undefined (free)
+        return i;
+      }
+    }
+    return null; // All occupied
   }
 }
 

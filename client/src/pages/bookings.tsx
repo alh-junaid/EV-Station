@@ -1,7 +1,9 @@
 import { BookingCard } from "@/components/booking-card";
 import { StatsCard } from "@/components/stats-card";
+import { RescheduleDialog } from "@/components/reschedule-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Zap, DollarSign, Calendar } from "lucide-react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type Booking } from "@shared/schema";
@@ -10,6 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 
 export default function Bookings() {
   const { toast } = useToast();
+  const [rescheduleId, setRescheduleId] = React.useState<string | null>(null);
 
   const { data: allBookings = [], isLoading } = useQuery<Booking[]>({
     queryKey: ["/api/bookings"],
@@ -128,6 +131,7 @@ export default function Bookings() {
                   carModel={(booking as any).carModel}
                   carNumber={(booking as any).carNumber}
                   onCancel={() => handleCancelBooking(booking.id)}
+                  onReschedule={() => setRescheduleId(booking.id)}
                 />
               ))
             )}
@@ -164,6 +168,20 @@ export default function Bookings() {
             )}
           </TabsContent>
         </Tabs>
+
+        {(() => {
+          const bookingToReschedule = allBookings.find(b => b.id === rescheduleId);
+          return (
+            <RescheduleDialog
+              open={!!rescheduleId && !!bookingToReschedule}
+              onOpenChange={(open) => !open && setRescheduleId(null)}
+              bookingId={rescheduleId}
+              stationId={bookingToReschedule?.stationId ?? 0}
+              currentDate={bookingToReschedule ? new Date(bookingToReschedule.date) : new Date()}
+              currentTime={bookingToReschedule?.startTime ?? ""}
+            />
+          );
+        })()}
       </div>
     </div>
   );

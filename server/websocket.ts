@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
+import { storage } from "./storage";
 
 interface StationClient {
   ws: WebSocket;
@@ -78,9 +79,14 @@ export class WebSocketHandler {
 
       case "SLOT_UPDATE":
         // Use stationId from the message payload (esp32 or camera should include it)
+        const sId = data.stationId ?? client.stationId;
+        if (sId && data.slotId !== undefined) {
+          storage.updateSlotStatus(sId, data.slotId, data.isOccupied);
+        }
+
         this.broadcastToClients({
           type: "SLOT_UPDATE",
-          stationId: data.stationId ?? client.stationId,
+          stationId: sId,
           slotId: data.slotId,
           isOccupied: data.isOccupied,
         });
